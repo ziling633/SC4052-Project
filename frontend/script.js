@@ -22,15 +22,15 @@ const campusMap = document.getElementById('campusMap');
 const formFeedback = document.getElementById('formFeedback');
 let aiInferenceTimeout = null;
 
-const mapPositions = [
-  { canteen: 'North Spine Food Court', top: '13%', left: '18%' },
-  { canteen: 'The Deck Food Court', top: '35%', left: '30%' },
-  { canteen: 'Canteen 11', top: '15%', left: '65%' },
-  { canteen: 'Canteen 13', top: '45%', left: '60%' },
-  { canteen: 'Food Paradise (North Hill)', top: '68%', left: '40%' },
-  { canteen: 'Canteen 16', top: '22%', left: '40%' },
-  { canteen: 'Canteen 18', top: '56%', left: '15%' },
-  { canteen: 'Canteen 9', top: '72%', left: '70%' }
+const mapCoordinates = [
+  { id: 'North Spine Food Court', top: '20%', left: '30%' },
+  { id: 'The Deck Food Court', top: '45%', left: '25%' },
+  { id: 'Food Paradise (North Hill)', top: '15%', left: '85%' },
+  { id: 'Canteen 9', top: '55%', left: '45%' },
+  { id: 'Canteen 11', top: '50%', left: '60%' },
+  { id: 'Canteen 13', top: '60%', left: '70%' },
+  { id: 'Canteen 16', top: '70%', left: '65%' },
+  { id: 'Canteen 18', top: '35%', left: '80%' }
 ];
 
 function getReports() {
@@ -137,6 +137,39 @@ function updateCampusMap(statusList) {
   });
 }
 
+function renderMap(statusList) {
+  const container = document.getElementById('campus-map-container');
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  mapCoordinates.forEach((point) => {
+    const statusInfo = statusList.find((s) => s.canteen === point.id);
+    const level = statusInfo?.level || 'unknown';
+
+    const node = document.createElement('div');
+    node.className = 'map-node ' + level;
+    node.style.top = point.top;
+    node.style.left = point.left;
+
+    const colorMap = {
+      low: 'var(--low)',
+      medium: 'var(--medium)',
+      high: 'var(--high)',
+      unknown: 'var(--unknown)'
+    };
+
+    node.style.backgroundColor = colorMap[level] || colorMap.unknown;
+
+    const tooltip = document.createElement('div');
+    tooltip.className = 'map-tooltip';
+    tooltip.innerHTML = `<strong>${point.id}</strong><span>${level === 'unknown' ? 'No recent data' : level.charAt(0).toUpperCase() + level.slice(1)}</span>`;
+
+    node.appendChild(tooltip);
+    container.appendChild(node);
+  });
+}
+
 function updateAdminAnalytics() {
   const reports = getReports();
   const todayStart = new Date();
@@ -191,6 +224,7 @@ function buildCards() {
   }
 
   updateCampusMap(status);
+  renderMap(status);
   updateAdminAnalytics();
 }
 

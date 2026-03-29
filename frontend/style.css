@@ -354,23 +354,78 @@ h1 {
   border: 1px solid #f0e8dd;
   padding: 1rem;
 }
-.campus-map {
+.tactile-map {
   position: relative;
   width: 100%;
-  height: 300px;
-  background-color: #f5f5f5;
-  border-radius: 8px;
+  height: 450px;
+  background: linear-gradient(135deg, rgba(245,243,240,1) 0%, rgba(238,234,227,1) 100%);
+  border: 1px solid #d6cfc7;
+  border-radius: 1rem;
+  box-shadow: inset 0 0 18px rgba(0,0,0,0.08);
   overflow: hidden;
   margin-top: 0.8rem;
-  border: 1px solid #e4dfd8;
 }
-.campus-dot {
+.tactile-map::before {
+  content: '';
   position: absolute;
-  width: 14px;
-  height: 14px;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(38,38,38,0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(38,38,38,0.08) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+}
+.map-node {
+  position: absolute;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  box-shadow: 0 0 8px rgba(0,0,0,0.2);
-  transition: background-color .2s ease;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transform: translate(-50%, -50%) scale(1);
+}
+.map-node:hover {
+  transform: translate(-50%, -50%) scale(1.2);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+}
+.map-tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  transform: translate(-50%, -8px) scale(0.95);
+  background: rgba(34, 34, 34, 0.94);
+  color: #f3f1ee;
+  font-family: 'Inter', 'Helvetica Neue', sans-serif;
+  font-size: 0.75rem;
+  line-height: 1.2;
+  padding: 0.45rem 0.6rem;
+  border-radius: 0.45rem;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease;
+  z-index: 3;
+}
+.map-node:hover .map-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, -12px) scale(1);
+}
+.map-tooltip strong {
+  display: block;
+  font-family: 'Playfair Display', serif;
+  font-size: 0.8rem;
+}
+.map-tooltip span {
+  font-family: 'Crimson Text', serif;
+  font-size: 0.72rem;
+  color: #ddd;
+}
+.campus-dot, .campus-label {
+  display: none;
 }
 .campus-label {
   position: absolute;
