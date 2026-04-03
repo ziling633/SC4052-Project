@@ -6,7 +6,13 @@ dist/
 __pycache__/
 .venv/
 .env
+.env.local
 *.py[cod]
+
+# Firebase & Secrets
+backend/firebase-key.json
+backend/*.json
+backend/.env
 
 # Vite / build
 frontend/dist/
