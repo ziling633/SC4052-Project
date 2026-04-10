@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #f7f2e8;
+  --bg-soft: #f2ece4;
+  --text: #1d1a16;
+  --muted: #7f7569;
+  --primary: #8f5b34;
+  --accent: #b17a4d;
+  --border: #e8dfd4;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: 'Inter', sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    line-height: 1.7;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Playfair Display', serif;
+    font-weight: 600;
+  }
+  button, input, select {
+    font: inherit;
+  }
+}
+
+::selection {
+  background: rgba(143, 91, 52, 0.18);
+}
