@@ -1,30 +1,54 @@
 "use client";
 
+import { motion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp } from 'firebase/firestore';
+import { firestore } from '../lib/firebaseClient';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000/api/v1';
 
 const CANTEEN_NAMES = [
-  'North Spine Food Court',
-  'The Deck Food Court',
-  'Canteen 11',
-  'Canteen 13',
-  'Food Paradise (North Hill)',
-  'Canteen 16',
-  'Canteen 18',
-  'Canteen 9',
+  'North Spine Food Court (Koufu)',
+  'South Spine Food Court (Fine Food)',
+  'Food Court @ NIE',
+  'Canteen 1 (Hall 1)',
+  'Canteen 2 (Hall 2)',
+  'Canteen 4 (Hall 4)',
+  'Canteen 5 (Hall 5)',
+  'Canteen 9 (Hall 9)',
 ];
 
 const MAP_COORDINATES = [
-  { id: 'North Spine Food Court', top: '20%', left: '28%' },
-  { id: 'The Deck Food Court', top: '45%', left: '22%' },
-  { id: 'Food Paradise (North Hill)', top: '18%', left: '82%' },
-  { id: 'Canteen 9', top: '52%', left: '44%' },
-  { id: 'Canteen 11', top: '50%', left: '60%' },
-  { id: 'Canteen 13', top: '62%', left: '70%' },
-  { id: 'Canteen 16', top: '72%', left: '64%' },
-  { id: 'Canteen 18', top: '36%', left: '79%' },
+  { id: 'North Spine Food Court (Koufu)', label: 'NS', lat: 1.3485, lng: 103.6813, top: '22%', left: '35%' },
+  { id: 'South Spine Food Court (Fine Food)', label: 'SS', lat: 1.3424, lng: 103.6823, top: '60%', left: '40%' },
+  { id: 'Food Court @ NIE', label: 'NIE', lat: 1.3483, lng: 103.6783, top: '28%', left: '18%' },
+  { id: 'Canteen 1 (Hall 1)', label: 'C1', lat: 1.3464, lng: 103.6867, top: '30%', left: '72%' },
+  { id: 'Canteen 2 (Hall 2)', label: 'C2', lat: 1.3481, lng: 103.6854, top: '18%', left: '62%' },
+  { id: 'Canteen 4 (Hall 4)', label: 'C4', lat: 1.3440, lng: 103.6860, top: '68%', left: '65%' },
+  { id: 'Canteen 5 (Hall 5)', label: 'C5', lat: 1.3445, lng: 103.6873, top: '65%', left: '78%' },
+  { id: 'Canteen 9 (Hall 9)', label: 'C9', lat: 1.3521, lng: 103.6849, top: '8%', left: '53%' },
 ];
+
+const CANTEEN_VISUALS = {
+  'North Spine Food Court (Koufu)': { image: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1000&q=80', blur: 10 },
+  'South Spine Food Court (Fine Food)': { image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1000&q=80', blur: 6 },
+  'Food Court @ NIE': { image: 'https://images.unsplash.com/photo-1498654896293-37aacf113fd9?auto=format&fit=crop&w=1000&q=80', blur: 12 },
+  'Canteen 1 (Hall 1)': { image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1000&q=80', blur: 8 },
+  'Canteen 2 (Hall 2)': { image: 'https://images.unsplash.com/photo-1454789548928-9efd52dc4031?auto=format&fit=crop&w=1000&q=80', blur: 5 },
+  'Canteen 4 (Hall 4)': { image: 'https://images.unsplash.com/photo-1555992336-03a23c52cdd2?auto=format&fit=crop&w=1000&q=80', blur: 14 },
+  'Canteen 5 (Hall 5)': { image: 'https://images.unsplash.com/photo-1498837167922-ddd27525d352?auto=format&fit=crop&w=1000&q=80', blur: 9 },
+  'Canteen 9 (Hall 9)': { image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1000&q=80', blur: 7 },
+};
+
+const getCanteenVisual = (name) => CANTEEN_VISUALS[name] || { image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1000&q=80', blur: 8 };
+
+const getMarkerColor = (crowdLevel) => {
+  const normalized = String(crowdLevel || '').toLowerCase();
+  if (normalized === 'low') return { bg: 'bg-emerald-400', border: 'border-emerald-500', text: 'text-emerald-900', glow: 'bg-emerald-300/40' };
+  if (normalized === 'medium') return { bg: 'bg-amber-400', border: 'border-amber-500', text: 'text-amber-900', glow: 'bg-amber-300/40' };
+  if (normalized === 'high') return { bg: 'bg-rose-500', border: 'border-rose-600', text: 'text-white', glow: 'bg-rose-400/40' };
+  return { bg: 'bg-slate-300', border: 'border-slate-400', text: 'text-slate-700', glow: 'bg-slate-300/40' };
+};
 
 const levelStyles = {
   Low: 'bg-emerald-400 text-emerald-900',
@@ -73,6 +97,22 @@ export default function Home() {
   const [statusList, setStatusList] = useState([]);
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [statusError, setStatusError] = useState('');
+  const [directoryItems, setDirectoryItems] = useState([]);
+  const [directoryLoading, setDirectoryLoading] = useState(true);
+  const [reportSummary, setReportSummary] = useState({ totalReports: 0, topCanteen: 'None' });
+  const [privacyFilterEnabled, setPrivacyFilterEnabled] = useState(false);
+  const [activeCanteen, setActiveCanteen] = useState(null);
+  const [modalOpen, setModalOpen] = useState(false);
+
+  const openCanteenModal = (canteen) => {
+    setActiveCanteen(canteen);
+    setModalOpen(true);
+  };
+
+  const closeCanteenModal = () => {
+    setModalOpen(false);
+    setActiveCanteen(null);
+  };
 
   const [selectedCanteen, setSelectedCanteen] = useState('');
   const [selectedLevel, setSelectedLevel] = useState('');
@@ -80,8 +120,13 @@ export default function Home() {
   const [aiHint, setAiHint] = useState('AI inference currently off. Choose a level or upload image for auto suggestion.');
   const [formFeedback, setFormFeedback] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState('idle');
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastVariant, setToastVariant] = useState('success');
+  const [toastVisible, setToastVisible] = useState(false);
 
   const aiTimeout = useRef(null);
+  const formRef = useRef(null);
 
   const fetchStatus = async () => {
     setLoadingStatus(true);
@@ -113,17 +158,78 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
-  const totalReports = useMemo(
-    () => statusList.reduce((sum, item) => sum + (item.report_count || 0), 0),
-    [statusList]
-  );
+  useEffect(() => {
+    setDirectoryLoading(true);
 
-  const topCanteen = useMemo(() => {
-    const sorted = [...statusList].sort((a, b) => (b.report_count || 0) - (a.report_count || 0));
-    return sorted[0] && sorted[0].report_count > 0
-      ? `${sorted[0].name} (${sorted[0].report_count})`
-      : 'None';
-  }, [statusList]);
+    const canteensQuery = query(
+      collection(firestore, 'canteens'),
+      orderBy('name', 'asc')
+    );
+
+    const unsubscribe = onSnapshot(
+      canteensQuery,
+      (snapshot) => {
+        const items = snapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            name: data.name || `Canteen ${doc.id}`,
+            crowdLevel: data.crowdLevel || data.crowd_level || 'Unknown',
+            lastUpdated: data.lastUpdated ? data.lastUpdated.toDate().toISOString() : null,
+          };
+        });
+        setDirectoryItems(items);
+        setDirectoryLoading(false);
+      },
+      (error) => {
+        console.error('Firestore listener error:', error);
+        setDirectoryItems([]);
+        setDirectoryLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const reportsQuery = query(
+      collection(firestore, 'reports'),
+      orderBy('timestamp', 'desc')
+    );
+
+    const unsubscribeReports = onSnapshot(
+      reportsQuery,
+      (snapshot) => {
+        const counts = {};
+        snapshot.docs.forEach((doc) => {
+          const data = doc.data();
+          const canteenName = data.canteen_name || 'Unknown';
+          counts[canteenName] = (counts[canteenName] || 0) + 1;
+        });
+
+        const totalReports = snapshot.size;
+        let topCanteen = 'None';
+        let topCount = 0;
+
+        Object.entries(counts).forEach(([name, count]) => {
+          if (count > topCount) {
+            topCount = count;
+            topCanteen = `${name} (${count})`;
+          }
+        });
+
+        setReportSummary({ totalReports, topCanteen });
+      },
+      (error) => {
+        console.error('Firestore reports listener error:', error);
+      }
+    );
+
+    return () => unsubscribeReports();
+  }, []);
+
+  const totalReports = reportSummary.totalReports;
+  const topCanteen = reportSummary.topCanteen;
 
   const handleFileChange = (event) => {
     const file = event.target.files?.[0] || null;
@@ -156,6 +262,7 @@ export default function Home() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setFormFeedback('');
+    setSubmitStatus('idle');
 
     if (!selectedCanteen) {
       setFormFeedback('Please select a canteen.');
@@ -180,33 +287,47 @@ export default function Home() {
     }
 
     setSubmitting(true);
+    setSubmitStatus('submitting');
 
     try {
-      const response = await fetch(`${API_BASE}/report`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          canteen_id: canteenId,
-          crowd_level: level,
-          source: selectedFile ? 'vision-ai' : 'manual',
-        }),
+      await addDoc(collection(firestore, 'reports'), {
+        canteen_id: canteenId,
+        canteen_name: selectedCanteen,
+        crowd_level: level,
+        source: selectedFile ? 'vision-ai' : 'manual',
+        image_name: selectedFile?.name || null,
+        image_type: selectedFile?.type || null,
+        image_size: selectedFile?.size || null,
+        timestamp: serverTimestamp(),
       });
-
-      if (!response.ok) {
-        const json = await response.json().catch(() => null);
-        throw new Error(json?.detail || 'Report submission failed');
-      }
 
       await fetchStatus();
       setFormFeedback('Report submitted successfully. Dashboard refreshed.');
+      setSubmitStatus('success');
+      setToastMessage('Successfully submitted report to Firestore');
+      setToastVariant('success');
+      setToastVisible(true);
       setSelectedCanteen('');
       setSelectedLevel('');
       setSelectedFile(null);
       setAiHint('AI inference currently off. Choose a level or upload image for auto suggestion.');
-      event.currentTarget.reset();
+      formRef.current?.reset();
+
+      window.setTimeout(() => {
+        setToastVisible(false);
+        setSubmitStatus('idle');
+      }, 3200);
     } catch (error) {
       console.error(error);
       setFormFeedback(error.message || 'Unable to submit report right now.');
+      setSubmitStatus('error');
+      setToastMessage('Report failed to submit. Please try again.');
+      setToastVariant('error');
+      setToastVisible(true);
+      window.setTimeout(() => {
+        setToastVisible(false);
+        setSubmitStatus('idle');
+      }, 3200);
     } finally {
       setSubmitting(false);
     }
@@ -223,6 +344,21 @@ export default function Home() {
 
   return (
     <>
+      <style>{`
+        @keyframes pulse-ring {
+          0% {
+            transform: scale(1);
+            opacity: 1;
+          }
+          100% {
+            transform: scale(2);
+            opacity: 0;
+          }
+        }
+        .pulse-marker {
+          animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+      `}</style>
       <header className="sticky top-0 z-50 border-b border-[rgba(33,18,8,0.08)] bg-[rgba(246,241,232,0.96)] backdrop-blur-sm">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <div className="text-sm uppercase tracking-[0.4em] text-[var(--muted)] font-semibold">CROWDBYTE</div>
@@ -235,13 +371,18 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="overflow-hidden">
+      <motion.main
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.45, ease: 'easeOut' }}
+        className="overflow-hidden"
+      >
         <section id="landing" className="bg-[var(--bg)] pb-24 pt-16">
           <div className="mx-auto max-w-7xl px-6">
             <div className="grid gap-16 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
               <div className="space-y-8">
                 <div className="text-xs uppercase tracking-[0.34em] text-[var(--muted)] font-semibold">
-                  Volume 01: The Academic Collective
+                  Campus-Flow-as-a-Service
                 </div>
                 <div className="max-w-2xl space-y-6">
                   <h1 className="text-5xl font-semibold leading-[0.92] tracking-[-0.03em] text-[var(--text)] sm:text-6xl lg:text-7xl">
@@ -262,12 +403,6 @@ export default function Home() {
               </div>
 
               <div className="relative overflow-hidden rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white shadow-[0_40px_80px_rgba(33,18,8,0.06)]">
-                <div className="absolute left-6 top-6 z-10 rounded-3xl border border-[rgba(33,18,8,0.06)] bg-[rgba(255,255,255,0.95)] p-6 shadow-xl">
-                  <div className="text-xs uppercase tracking-[0.35em] text-[var(--primary)]">01</div>
-                  <p className="mt-4 max-w-xs text-base leading-7 text-[var(--text)]">
-                    Traffic patterns and crowd dynamics in academic spaces.
-                  </p>
-                </div>
                 <div className="grid grid-cols-2 grid-rows-2 gap-4 p-4 sm:p-6">
                   <img className="h-64 w-full rounded-3xl object-cover shadow-lg transition duration-500 hover:scale-105 sm:h-72" src="https://images.unsplash.com/photo-1571171637578-041f4a2d3a72?auto=format&fit=crop&w=800&q=80" alt="NTU study" />
                   <img className="h-64 w-full rounded-3xl object-cover shadow-lg transition duration-500 hover:scale-105 sm:h-72" src="https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=800&q=80" alt="Campus life" />
@@ -409,33 +544,78 @@ export default function Home() {
                     <span className="inline-flex rounded-full bg-[var(--bg-soft)] px-4 py-2 text-xs uppercase tracking-[0.24em] text-[var(--muted)]">Live</span>
                   </div>
                   <div className="mt-8 space-y-5">
-                    {['North Spine Food Court', 'The Deck Food Court', 'Canteen 11', 'Food Paradise (North Hill)'].map((name, index) => (
-                      <div key={name} className="flex items-center justify-between gap-4 rounded-[1.75rem] border border-[rgba(33,18,8,0.06)] bg-[var(--bg-soft)] px-5 py-4">
-                        <div>
-                          <p className="text-sm font-semibold text-[var(--text)]">{name}</p>
-                          <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Updated 4m ago</p>
-                        </div>
-                        <span className="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-emerald-900">LOW</span>
-                      </div>
-                    ))}
+                    {directoryLoading ? (
+                      <div className="rounded-[1.75rem] border border-[rgba(33,18,8,0.06)] bg-[var(--bg-soft)] p-5 text-sm text-[var(--muted)]">Listening for live canteen updates...</div>
+                    ) : directoryItems.length > 0 ? (
+                      directoryItems.map((item) => {
+                        const normalized = item.crowdLevel?.toLowerCase() || 'unknown';
+                        const statusStyles =
+                          normalized === 'low'
+                            ? 'bg-emerald-100 text-emerald-900'
+                            : normalized === 'medium'
+                            ? 'bg-amber-100 text-amber-900'
+                            : normalized === 'high'
+                            ? 'bg-rose-100 text-rose-900'
+                            : 'bg-slate-100 text-slate-700';
+
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => openCanteenModal(item)}
+                            className="group w-full rounded-[1.75rem] border border-[rgba(33,18,8,0.06)] bg-[var(--bg-soft)] px-5 py-4 text-left transition hover:shadow-lg"
+                          >
+                            <div className="flex items-center justify-between gap-4">
+                              <div>
+                                <p className="text-sm font-semibold text-[var(--text)]">{item.name}</p>
+                                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                                  {item.lastUpdated ? `Updated ${new Date(item.lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'No timestamp available'}
+                                </p>
+                              </div>
+                              <span className={`inline-flex rounded-full px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.18em] ${statusStyles}`}>{item.crowdLevel || 'UNKNOWN'}</span>
+                            </div>
+                            <div className="mt-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Tap for detail</div>
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <div className="rounded-[1.75rem] border border-[rgba(33,18,8,0.06)] bg-[var(--bg-soft)] p-5 text-sm text-[var(--muted)]">No directory items found in Firestore.</div>
+                    )}
                   </div>
                 </div>
                 <div className="rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white p-8 shadow-[0_20px_40px_rgba(33,18,8,0.05)]">
-                  <p className="text-sm uppercase tracking-[0.28em] text-[var(--muted)]">Privacy feed</p>
-                  <h3 className="mt-4 text-2xl font-semibold text-[var(--text)]">Anonymized insights</h3>
-                  <p className="mt-3 text-sm leading-7 text-[var(--muted)]">A quiet rolling feed of blurred activity, designed to preserve identity while showing volume trends.</p>
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-sm uppercase tracking-[0.28em] text-[var(--muted)]">Privacy feed</p>
+                      <h3 className="mt-4 text-2xl font-semibold text-[var(--text)]">Anonymized insights</h3>
+                      <p className="mt-3 text-sm leading-7 text-[var(--muted)]">A quiet rolling feed of blurred activity, designed to preserve identity while showing volume trends.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setPrivacyFilterEnabled((prev) => !prev)}
+                      className={`inline-flex whitespace-nowrap rounded-full px-5 py-2 text-sm font-semibold uppercase tracking-[0.18em] transition ${privacyFilterEnabled ? 'bg-emerald-950 text-white' : 'bg-slate-100 text-[var(--text)] hover:bg-slate-200'}`}
+                    >
+                      Privacy Filter: {privacyFilterEnabled ? 'On' : 'Off'}
+                    </button>
+                  </div>
                   <div className="mt-8 space-y-4">
                     {[
-                      { label: 'Student study zones', status: 'Stable', note: 'Masked movement detected' },
+                      { label: 'Student study zones', status: privacyFilterEnabled ? 'Redacting' : 'Stable', note: privacyFilterEnabled ? 'Real-time identity redaction active' : 'Masked movement detected', blurred: true },
                       { label: 'Dining queues', status: 'Rising', note: 'Anonymous density spike' },
                       { label: 'Open seating', status: 'Calm', note: 'Balanced occupancy' },
                     ].map((item) => (
-                      <div key={item.label} className="rounded-[1.75rem] border border-[rgba(33,18,8,0.06)] bg-[var(--bg-soft)] p-5">
-                        <div className="flex items-center justify-between gap-4">
+                      <div
+                        key={item.label}
+                        className={`relative rounded-[1.75rem] border border-[rgba(33,18,8,0.06)] bg-[var(--bg-soft)] p-5 ${item.blurred && privacyFilterEnabled ? 'overflow-hidden' : ''}`}
+                      >
+                        {item.blurred && privacyFilterEnabled ? (
+                          <div className="pointer-events-none absolute inset-0 bg-slate-950/20 backdrop-blur-[8px]" />
+                        ) : null}
+                        <div className="relative z-10 flex items-center justify-between gap-4">
                           <p className="text-sm font-semibold text-[var(--text)]">{item.label}</p>
                           <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">{item.status}</span>
                         </div>
-                        <p className="mt-2 text-sm leading-7 text-[var(--muted)]">{item.note}</p>
+                        <p className="relative z-10 mt-2 text-sm leading-7 text-[var(--muted)]">{item.note}</p>
                       </div>
                     ))}
                   </div>
@@ -453,31 +633,33 @@ export default function Home() {
                   </div>
                   <div className="mt-8 overflow-hidden rounded-[1.75rem] border border-[rgba(33,18,8,0.06)] bg-[var(--bg-soft)] p-4">
                     <div className="relative aspect-[4/3] rounded-[1.5rem] bg-[radial-gradient(circle_at_top_left,_rgba(236,72,153,0.12),_transparent_28%),_radial-gradient(circle_at_bottom_right,_rgba(34,197,94,0.12),_transparent_32%),_rgb(248,244,238)]">
-                      {[
-                        { label: 'NS', top: '18%', left: '22%', glow: 'bg-emerald-300/25' },
-                        { label: 'Deck', top: '35%', left: '56%', glow: 'bg-amber-300/25' },
-                        { label: '11', top: '58%', left: '70%', glow: 'bg-rose-300/25' },
-                        { label: 'Hill', top: '70%', left: '34%', glow: 'bg-emerald-300/25' },
-                      ].map((marker) => (
-                        <div key={marker.label} className="absolute flex items-center justify-center rounded-full text-[0.65rem] font-semibold text-[var(--text)]" style={{ top: marker.top, left: marker.left, width: '3rem', height: '3rem', transform: 'translate(-50%, -50%)' }}>
-                          <span className={`absolute inset-0 rounded-full ${marker.glow} blur-2xl`} />
-                          <span className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white bg-white/90 shadow-[0_8px_20px_rgba(33,18,8,0.1)]">{marker.label}</span>
-                        </div>
-                      ))}
+                      {MAP_COORDINATES.map((marker, idx) => {
+                        const canteenData = directoryItems.find((item) => item.name === marker.id);
+                        const crowdLevel = canteenData?.crowdLevel || 'Unknown';
+                        const colors = getMarkerColor(crowdLevel);
+                        return (
+                          <div key={marker.label} className="absolute flex items-center justify-center" style={{ top: marker.top, left: marker.left, width: '3rem', height: '3rem', transform: 'translate(-50%, -50%)' }}>
+                            <span className={`absolute inset-0 rounded-full ${colors.glow} blur-2xl`} />
+                            <span className={`absolute inset-0 rounded-full ${colors.bg} pulse-marker`} />
+                            <span className={`relative inline-flex h-10 w-10 items-center justify-center rounded-full border-2 ${colors.border} ${colors.bg} ${colors.text} shadow-[0_8px_20px_rgba(33,18,8,0.2)] text-[0.65rem] font-bold`}>{marker.label}</span>
+                          </div>
+                        );
+                      })}
                     </div>
                     <div className="mt-6 grid gap-3 text-sm text-[var(--muted)]">
                       <div className="flex items-center gap-3">
                         <span className="inline-flex h-3.5 w-3.5 rounded-full bg-emerald-400"></span>
-                        <span>Low crowd</span>
+                        <span>Low crowd (Live)</span>
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="inline-flex h-3.5 w-3.5 rounded-full bg-amber-400"></span>
-                        <span>Medium crowd</span>
+                        <span>Medium crowd (Live)</span>
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="inline-flex h-3.5 w-3.5 rounded-full bg-rose-500"></span>
-                        <span>High crowd</span>
+                        <span>High crowd (Live)</span>
                       </div>
+                      <p className="mt-2 text-xs italic text-[var(--muted)]">Markers update in real-time from Firestore</p>
                     </div>
                   </div>
                 </div>
@@ -536,7 +718,7 @@ export default function Home() {
               <h2 className="text-4xl font-semibold tracking-[-0.03em] text-[var(--text)]">Share what the canteens feel like now</h2>
               <p className="max-w-2xl mx-auto text-base leading-8 text-[var(--muted)]">Tell the campus how busy a canteen is using a quick report and optional photo.</p>
             </div>
-            <form onSubmit={handleSubmit} className="space-y-6 rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white p-8 shadow-[0_25px_50px_rgba(33,18,8,0.05)]">
+            <form ref={formRef} onSubmit={handleSubmit} className="space-y-6 rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white p-8 shadow-[0_25px_50px_rgba(33,18,8,0.05)]">
               <label className="block text-sm font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Select canteen</label>
               <select
                 value={selectedCanteen}
@@ -576,13 +758,79 @@ export default function Home() {
                 disabled={submitting}
                 className="inline-flex w-full items-center justify-center rounded-full bg-[var(--primary)] px-6 py-4 text-sm font-semibold uppercase tracking-[0.22em] text-white transition hover:bg-[var(--accent)] disabled:cursor-not-allowed disabled:bg-slate-300"
               >
-                {submitting ? 'Submitting…' : 'Submit report'}
+                {submitting
+                  ? 'Submitting…'
+                  : submitStatus === 'success'
+                  ? '✓ Submitted'
+                  : submitStatus === 'error'
+                  ? 'Retry'
+                  : 'Submit report'}
               </button>
 
               {formFeedback ? <p className="text-sm text-[var(--muted)]">{formFeedback}</p> : null}
             </form>
+
+            <div className={`pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-6 transition-opacity duration-300 ${toastVisible ? 'opacity-100' : 'opacity-0'}`}>
+              <div className={`rounded-full border border-white/10 px-5 py-3 text-sm shadow-[0_18px_60px_rgba(33,18,8,0.18)] ${toastVariant === 'success' ? 'bg-emerald-950 text-white' : 'bg-rose-950 text-white'}`}>
+                {toastMessage}
+              </div>
+            </div>
           </div>
         </section>
+
+        {modalOpen && activeCanteen ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8 backdrop-blur-sm">
+            <div className="relative w-full max-w-3xl overflow-hidden rounded-[2rem] bg-white shadow-[0_35px_80px_rgba(33,18,8,0.18)]">
+              <div className="relative h-64 overflow-hidden">
+                <div
+                  className="absolute inset-0 bg-cover bg-center"
+                  style={{
+                    backgroundImage: `url(${getCanteenVisual(activeCanteen.name).image})`,
+                    filter: `blur(${getCanteenVisual(activeCanteen.name).blur}px) brightness(0.65)`,
+                  }}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+                <button
+                  type="button"
+                  onClick={closeCanteenModal}
+                  className="absolute right-4 top-4 z-20 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-[var(--text)] shadow-sm transition hover:bg-white pointer-events-auto"
+                  aria-label="Close canteen detail"
+                >
+                  ×
+                </button>
+                <div className="relative z-10 flex h-full flex-col justify-end p-6 text-white">
+                  <p className="text-sm uppercase tracking-[0.28em] text-white/80">Canteen detail</p>
+                  <h3 className="mt-3 text-3xl font-semibold">{activeCanteen.name}</h3>
+                </div>
+              </div>
+              <div className="space-y-6 p-8">
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="rounded-[1.5rem] bg-[var(--bg-soft)] p-5">
+                    <p className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">Crowd level</p>
+                    <p className="mt-3 text-2xl font-semibold text-[var(--text)]">{activeCanteen.crowdLevel || 'Unknown'}</p>
+                  </div>
+                  <div className="rounded-[1.5rem] bg-[var(--bg-soft)] p-5">
+                    <p className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">Last updated</p>
+                    <p className="mt-3 text-2xl font-semibold text-[var(--text)]">{activeCanteen.lastUpdated ? new Date(activeCanteen.lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Unknown'}</p>
+                  </div>
+                  <div className="rounded-[1.5rem] bg-[var(--bg-soft)] p-5">
+                    <p className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">Report source</p>
+                    <p className="mt-3 text-2xl font-semibold text-[var(--text)]">Firestore</p>
+                  </div>
+                </div>
+                <div className="rounded-[1.75rem] bg-[var(--bg-soft)] p-6">
+                  <p className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">Live feed</p>
+                  <p className="mt-3 text-sm leading-7 text-[var(--muted)]">This detail view is populated with the selected canteen's Firestore data and uses a distinct blurred visual to represent current crowd sensing.</p>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  {['Focus', 'Redaction', 'Activity'].map((tag) => (
+                    <span key={tag} className="inline-flex rounded-full bg-slate-100 px-4 py-2 text-xs uppercase tracking-[0.18em] text-[var(--muted)]">{tag}</span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         <footer className="border-t border-[rgba(33,18,8,0.08)] bg-[var(--bg-soft)] py-16">
           <div className="mx-auto max-w-7xl px-6">
@@ -615,7 +863,7 @@ export default function Home() {
             </div>
           </div>
         </footer>
-      </main>
+      </motion.main>
     </>
   );
 }
