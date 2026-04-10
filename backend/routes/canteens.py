@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from firebase_admin import firestore
 from datetime import datetime, timedelta
 from models import CrowdStatus, AllCanteenStatus
+from database import get_db
 
 router = APIRouter(prefix="/api/v1")
 
@@ -54,13 +55,14 @@ def compute_crowd_status(canteen_id: str, db) -> dict:
     """
     try:
         # Get reports from last 10 minutes
-        ten_min_ago = datetime.now() - timedelta(minutes=10)
+        ten_min_ago = firestore.Timestamp.from_datetime(datetime.utcnow() - timedelta(minutes=10))
         
         reports_ref = db.collection("reports")
         query = (reports_ref
                 .where("canteen_id", "==", canteen_id)
                 .where("timestamp", ">=", ten_min_ago)
-                .order_by("timestamp", direction=firestore.Query.DESCENDING))
+                .order_by("timestamp", direction=firestore.Query.DESCENDING)
+                .limit(20))  # Limit to recent reports
         
         reports = query.stream()
         report_list = list(reports)
@@ -112,7 +114,7 @@ async def get_all_canteens_status():
     Returns current crowd level, confidence, and last update time for each canteen
     """
     try:
-        db = firestore.client()
+        db = get_db()
         
         # Get all canteens
         canteens = db.collection("canteens").stream()
@@ -171,7 +173,7 @@ async def get_canteen_details(canteen_id: str):
     - **canteen_id**: ID of the canteen (1-8)
     """
     try:
-        db = firestore.client()
+        db = get_db()
         
         # Get canteen info
         canteen_ref = db.collection("canteens").document(canteen_id)

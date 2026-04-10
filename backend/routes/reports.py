@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from firebase_admin import firestore
 from datetime import datetime
 from models import ReportRequest, ReportResponse
+from database import get_db
 
 router = APIRouter(prefix="/api/v1")
 
@@ -21,7 +22,7 @@ async def submit_report(request: ReportRequest):
     - **source**: Optional, "manual" or "vision-ai" (default: "manual")
     """
     try:
-        db = firestore.client()
+        db = get_db()
         
         # Validate crowd_level
         if request.crowd_level not in VALID_LEVELS:
@@ -45,7 +46,7 @@ async def submit_report(request: ReportRequest):
             "canteen_id": request.canteen_id,
             "crowd_level": request.crowd_level,
             "source": request.source,
-            "timestamp": firestore.SERVER_TIMESTAMP,
+            "timestamp": firestore.Timestamp.from_datetime(datetime.utcnow()),
             "user_id": "anon_user"  # TODO: Get from auth in Phase 4
         }
         
