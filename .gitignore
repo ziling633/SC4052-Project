@@ -39,3 +39,9 @@ dist/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+__pycache__/
+*.py[cod]
+venv/
+.env
+firebase-key.json
