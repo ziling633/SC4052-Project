@@ -2,93 +2,72 @@
 Canteen status and information endpoints
 """
 from fastapi import APIRouter, HTTPException
-from firebase_admin import firestore
-from datetime import datetime, timedelta
+from google.cloud import firestore
+import datetime # Use native datetime for all math
 from models import CrowdStatus, AllCanteenStatus
 from database import get_db
 
 router = APIRouter(prefix="/api/v1")
 
-
 def encode_level(level: str) -> int:
-    """Convert crowd level to numeric value"""
     mapping = {"Low": 1, "Medium": 2, "High": 3}
     return mapping.get(level, 0)
 
-
 def decode_level(numeric_value: float) -> str:
-    """Convert numeric value back to crowd level"""
-    if numeric_value < 1.5:
-        return "Low"
-    elif numeric_value < 2.5:
-        return "Medium"
-    else:
-        return "High"
-
+    if numeric_value < 1.5: return "Low"
+    elif numeric_value < 2.5: return "Medium"
+    else: return "High"
 
 def apply_staleness_logic(last_report_time, status: str) -> str:
-    """
-    If last report is older than 15 minutes, mark as Unknown
-    """
+    """If last report is older than 15 minutes, mark as Unknown"""
     if last_report_time is None:
         return "Unknown"
     
-    now = datetime.now()
-    time_diff = now - last_report_time.replace(tzinfo=None)
+    # Use timezone-aware UTC now for comparison
+    now = datetime.datetime.now(datetime.timezone.utc)
     
-    if time_diff > timedelta(minutes=15):
+    # Ensure last_report_time is also timezone aware
+    if last_report_time.tzinfo is None:
+        last_report_time = last_report_time.replace(tzinfo=datetime.timezone.utc)
+        
+    time_diff = now - last_report_time
+    
+    if time_diff > datetime.timedelta(minutes=15):
         return "Unknown"
     
     return status
 
-
 def compute_crowd_status(canteen_id: str, db) -> dict:
-    """
-    Compute crowd status for a canteen by averaging recent reports
-    Algorithm:
-    1. Get all reports from last 10 minutes
-    2. Encode each level to numeric (Low=1, Medium=2, High=3)
-    3. Calculate average
-    4. Decode back to level
-    5. Calculate confidence (reports / expected_reports)
-    6. Apply staleness logic
-    """
+    """Compute crowd status by averaging reports from last 10 minutes"""
     try:
-        # Get reports from last 10 minutes
-        ten_min_ago = firestore.Timestamp.from_datetime(datetime.utcnow() - timedelta(minutes=10))
+        # FIX: Use native datetime cutoff instead of firestore.Timestamp
+        now = datetime.datetime.now(datetime.timezone.utc)
+        ten_min_ago = now - datetime.timedelta(minutes=10)
         
         reports_ref = db.collection("reports")
         query = (reports_ref
                 .where("canteen_id", "==", canteen_id)
                 .where("timestamp", ">=", ten_min_ago)
                 .order_by("timestamp", direction=firestore.Query.DESCENDING)
-                .limit(20))  # Limit to recent reports
+                .limit(20))
         
-        reports = query.stream()
-        report_list = list(reports)
+        report_list = list(query.stream())
         
         if not report_list:
-            return {
-                "status": "Unknown",
-                "confidence": 0.0,
-                "last_updated": None,
-                "report_count": 0
-            }
+            return {"status": "Unknown", "confidence": 0.0, "last_updated": None, "report_count": 0}
         
-        # Encode and average
-        encoded_values = [encode_level(report.get("crowd_level")) for report in report_list]
+        # Aggregate levels
+        encoded_values = [encode_level(doc.get("crowd_level")) for doc in report_list]
         avg_value = sum(encoded_values) / len(encoded_values)
-        decoded_status = decode_level(avg_value)
         
-        # Calculate confidence (max 1.0, expect ~6 reports per 10 min in busy time)
+        # Confidence calculation
         confidence = min(len(report_list) / 6.0, 1.0)
         
         # Get last report timestamp
-        last_report = report_list[0]
-        last_timestamp = last_report.get("timestamp")
+        last_timestamp = report_list[0].get("timestamp")
         
-        # Apply staleness logic
-        final_status = apply_staleness_logic(last_timestamp, decoded_status)
+        # Apply staleness logic and return
+        final_status = apply_staleness_logic(last_timestamp, decode_level(avg_value))
         
         return {
             "status": final_status,
@@ -98,248 +77,65 @@ def compute_crowd_status(canteen_id: str, db) -> dict:
         }
         
     except Exception as e:
-        print(f"❌ Error computing crowd status for canteen {canteen_id}: {e}")
-        return {
-            "status": "Unknown",
-            "confidence": 0.0,
-            "last_updated": None,
-            "report_count": 0
-        }
-
+        print(f"❌ Error computing for canteen {canteen_id}: {e}")
+        return {"status": "Unknown", "confidence": 0.0, "last_updated": None, "report_count": 0}
 
 @router.get("/canteens/status", response_model=AllCanteenStatus)
 async def get_all_canteens_status():
-    """
-    Get crowd status for all canteens
-    Returns current crowd level, confidence, and last update time for each canteen
-    """
+    """Get crowd status for all 14 canteens"""
     try:
         db = get_db()
-        
-        # Get all canteens
-        canteens = db.collection("canteens").stream()
-        canteen_list = list(canteens)
+        canteen_list = list(db.collection("canteens").stream())
         
         if not canteen_list:
-            raise HTTPException(
-                status_code=404,
-                detail="No canteens found in database"
-            )
+            raise HTTPException(status_code=404, detail="No canteens found")
         
-        # Compute status for each canteen
         statuses = []
         for canteen in canteen_list:
-            canteen_data = canteen.to_dict()
-            canteen_id = canteen.id
+            cid = canteen.id
+            cdata = canteen.to_dict()
+            crowd = compute_crowd_status(cid, db)
             
-            # Get crowd status
-            crowd_data = compute_crowd_status(canteen_id, db)
-            
-            status = CrowdStatus(
-                canteen_id=canteen_id,
-                name=canteen_data.get("name", "Unknown"),
-                location=canteen_data.get("location", "Unknown"),
-                lat=canteen_data.get("lat", 0.0),
-                lng=canteen_data.get("lng", 0.0),
-                current_status=crowd_data["status"],
-                confidence=crowd_data["confidence"],
-                last_updated=crowd_data["last_updated"] or "Never",
-                report_count=crowd_data["report_count"]
-            )
-            statuses.append(status)
+            # Populate model allowing for null coordinates
+            statuses.append(CrowdStatus(
+                canteen_id=cid,
+                name=cdata.get("name", "Unknown"),
+                location=cdata.get("location", "Unknown"),
+                lat=cdata.get("lat"),
+                lng=cdata.get("lng"),
+                current_status=crowd["status"],
+                confidence=crowd["confidence"],
+                last_updated=crowd["last_updated"] or "Never",
+                report_count=crowd["report_count"]
+            ))
         
         return AllCanteenStatus(
             status="success",
-            message=f"Retrieved status for {len(statuses)} canteens",
+            message=f"Retrieved {len(statuses)} canteens",
             data=statuses,
-            timestamp=datetime.now().isoformat() + "Z"
+            timestamp=datetime.datetime.now().isoformat()
         )
-        
-    except HTTPException:
-        raise
     except Exception as e:
-        print(f"❌ Error fetching canteen statuses: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Internal server error: {str(e)}"
-        )
-
+        print(f"❌ Fetch Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/canteens/{canteen_id}", response_model=CrowdStatus)
 async def get_canteen_details(canteen_id: str):
-    """
-    Get detailed status for a single canteen
+    db = get_db()
+    canteen = db.collection("canteens").document(canteen_id).get()
+    if not canteen.exists:
+        raise HTTPException(status_code=404, detail="Not found")
     
-    - **canteen_id**: ID of the canteen (1-8)
-    """
-    try:
-        db = get_db()
-        
-        # Get canteen info
-        canteen_ref = db.collection("canteens").document(canteen_id)
-        canteen = canteen_ref.get()
-        
-        if not canteen.exists:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Canteen with ID {canteen_id} not found"
-            )
-        
-        canteen_data = canteen.to_dict()
-        
-        # Get crowd status
-        crowd_data = compute_crowd_status(canteen_id, db)
-        
-        return CrowdStatus(
-            canteen_id=canteen_id,
-            name=canteen_data.get("name", "Unknown"),
-            location=canteen_data.get("location", "Unknown"),
-            lat=canteen_data.get("lat", 0.0),
-            lng=canteen_data.get("lng", 0.0),
-            current_status=crowd_data["status"],
-            confidence=crowd_data["confidence"],
-            last_updated=crowd_data["last_updated"] or "Never",
-            report_count=crowd_data["report_count"]
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"❌ Error fetching canteen {canteen_id}: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Internal server error: {str(e)}"
-        )
-
-
-def encode_level(level: str) -> int:
-    """Convert crowd level to numeric value"""
-    mapping = {"Low": 1, "Medium": 2, "High": 3}
-    return mapping.get(level, 0)
-
-
-def decode_level(numeric_value: float) -> str:
-    """Convert numeric value back to crowd level"""
-    if numeric_value < 1.5:
-        return "Low"
-    elif numeric_value < 2.5:
-        return "Medium"
-    else:
-        return "High"
-
-
-def apply_staleness_logic(last_report_time, status: str) -> str:
-    """
-    If last report is older than 15 minutes, mark as Unknown
-    """
-    if last_report_time is None:
-        return "Unknown"
-    
-    now = datetime.now()
-    time_diff = now - last_report_time.replace(tzinfo=None)
-    
-    if time_diff > timedelta(minutes=15):
-        return "Unknown"
-    
-    return status
-
-
-@router.get("/canteens/status", response_model=AllCanteenStatus)
-async def get_all_canteens_status():
-    """
-    Get crowd status for all canteens
-    Returns current crowd level, confidence, and last update time for each canteen
-    """
-    try:
-        # Get all canteens
-        canteens = db.collection("canteens").stream()
-        canteen_list = list(canteens)
-        
-        if not canteen_list:
-            raise HTTPException(
-                status_code=404,
-                detail="No canteens found in database"
-            )
-        
-        # Compute status for each canteen
-        statuses = []
-        for canteen in canteen_list:
-            canteen_data = canteen.to_dict()
-            canteen_id = canteen.id
-            
-            # Get crowd status
-            crowd_data = compute_crowd_status(canteen_id, db)
-            
-            status = CrowdStatus(
-                canteen_id=canteen_id,
-                name=canteen_data.get("name", "Unknown"),
-                location=canteen_data.get("location", "Unknown"),
-                lat=canteen_data.get("lat", 0.0),
-                lng=canteen_data.get("lng", 0.0),
-                current_status=crowd_data["status"],
-                confidence=crowd_data["confidence"],
-                last_updated=crowd_data["last_updated"] or "Never",
-                report_count=crowd_data["report_count"]
-            )
-            statuses.append(status)
-        
-        return AllCanteenStatus(
-            status="success",
-            message=f"Retrieved status for {len(statuses)} canteens",
-            data=statuses,
-            timestamp=datetime.now().isoformat() + "Z"
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"❌ Error fetching canteen statuses: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Internal server error: {str(e)}"
-        )
-
-
-@router.get("/canteens/{canteen_id}", response_model=CrowdStatus)
-async def get_canteen_details(canteen_id: str):
-    """
-    Get detailed status for a single canteen
-    
-    - **canteen_id**: ID of the canteen (1-8)
-    """
-    try:
-        # Get canteen info
-        canteen_ref = db.collection("canteens").document(canteen_id)
-        canteen = canteen_ref.get()
-        
-        if not canteen.exists:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Canteen with ID {canteen_id} not found"
-            )
-        
-        canteen_data = canteen.to_dict()
-        
-        # Get crowd status
-        crowd_data = compute_crowd_status(canteen_id, db)
-        
-        return CrowdStatus(
-            canteen_id=canteen_id,
-            name=canteen_data.get("name", "Unknown"),
-            location=canteen_data.get("location", "Unknown"),
-            lat=canteen_data.get("lat", 0.0),
-            lng=canteen_data.get("lng", 0.0),
-            current_status=crowd_data["status"],
-            confidence=crowd_data["confidence"],
-            last_updated=crowd_data["last_updated"] or "Never",
-            report_count=crowd_data["report_count"]
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"❌ Error fetching canteen {canteen_id}: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Internal server error: {str(e)}"
-        )
+    cdata = canteen.to_dict()
+    crowd = compute_crowd_status(canteen_id, db)
+    return CrowdStatus(
+        canteen_id=canteen_id,
+        name=cdata.get("name", "Unknown"),
+        location=cdata.get("location", "Unknown"),
+        lat=cdata.get("lat"),
+        lng=cdata.get("lng"),
+        current_status=crowd["status"],
+        confidence=crowd["confidence"],
+        last_updated=crowd["last_updated"] or "Never",
+        report_count=crowd["report_count"]
+    )

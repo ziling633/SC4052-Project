@@ -37,17 +37,16 @@ class CanteenInfo(BaseModel):
     lng: float
 
 
+from typing import Optional # Add this import
+
 class CrowdStatus(BaseModel):
-    """Crowd status for a single canteen"""
     canteen_id: str
     name: str
-    location: str
-    lat: float
-    lng: float
-    current_status: str  # "Low", "Medium", "High", "Unknown"
-    confidence: float  # 0.0 to 1.0 based on number of reports
-    last_updated: str
-    report_count: int
+    current_status: str
+    lat: Optional[float] = None 
+    lng: Optional[float] = None
+    confidence: float
+    last_updated: Optional[str] = None
 
 
 class AllCanteenStatus(BaseModel):

@@ -8,25 +8,27 @@ import { firestore } from '../lib/firebaseClient';
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000/api/v1';
 
 const CANTEEN_NAMES = [
-  'North Spine Food Court (Koufu)',
-  'South Spine Food Court (Fine Food)',
-  'Food Court @ NIE',
-  'Canteen 1 (Hall 1)',
-  'Canteen 2 (Hall 2)',
-  'Canteen 4 (Hall 4)',
-  'Canteen 5 (Hall 5)',
-  'Canteen 9 (Hall 9)',
+  'Canteen 1', 'Canteen 2', 'Canteen 4', 'Canteen 9', 'Canteen 11',
+  'Canteen 14', 'Canteen 16', 'North Hill Food Court', 'Crescent Food Court',
+  'Northspine food court (Canteen A)', 'Southspine food court (Canteen B)',
+  'Quad Cafe', 'Pioneer Food Court', 'Nanyang Crescent Food Court'
 ];
 
 const MAP_COORDINATES = [
-  { id: 'North Spine Food Court (Koufu)', label: 'NS', lat: 1.3485, lng: 103.6813, top: '22%', left: '35%' },
-  { id: 'South Spine Food Court (Fine Food)', label: 'SS', lat: 1.3424, lng: 103.6823, top: '60%', left: '40%' },
-  { id: 'Food Court @ NIE', label: 'NIE', lat: 1.3483, lng: 103.6783, top: '28%', left: '18%' },
-  { id: 'Canteen 1 (Hall 1)', label: 'C1', lat: 1.3464, lng: 103.6867, top: '30%', left: '72%' },
-  { id: 'Canteen 2 (Hall 2)', label: 'C2', lat: 1.3481, lng: 103.6854, top: '18%', left: '62%' },
-  { id: 'Canteen 4 (Hall 4)', label: 'C4', lat: 1.3440, lng: 103.6860, top: '68%', left: '65%' },
-  { id: 'Canteen 5 (Hall 5)', label: 'C5', lat: 1.3445, lng: 103.6873, top: '65%', left: '78%' },
-  { id: 'Canteen 9 (Hall 9)', label: 'C9', lat: 1.3521, lng: 103.6849, top: '8%', left: '53%' },
+  { id: '1', label: 'C1', top: '30%', left: '72%' },
+  { id: '2', label: 'C2', top: '18%', left: '62%' },
+  { id: '3', label: 'C4', top: '68%', left: '65%' },
+  { id: '4', label: 'C9', top: '8%', left: '53%' },
+  { id: '5', label: 'C11', top: '45%', left: '30%' },
+  { id: '6', label: 'C14', top: '15%', left: '45%' },
+  { id: '7', label: 'C16', top: '25%', left: '55%' },
+  { id: '8', label: 'NH', top: '10%', left: '75%' },
+  { id: '9', label: 'CR', top: '40%', left: '20%' },
+  { id: '10', label: 'NSA', top: '22%', left: '35%' },
+  { id: '11', label: 'SSB', top: '60%', left: '40%' },
+  { id: '12', label: 'QC', top: '55%', left: '35%' },
+  { id: '13', label: 'PFC', top: '80%', left: '80%' },
+  { id: '14', label: 'NCFC', top: '12%', left: '65%' },
 ];
 
 const CANTEEN_VISUALS = {
@@ -161,9 +163,10 @@ export default function Home() {
   useEffect(() => {
     setDirectoryLoading(true);
 
+    // Sorting by 'lastUpdated' in descending order so newest reports appear first
     const canteensQuery = query(
       collection(firestore, 'canteens'),
-      orderBy('name', 'asc')
+      orderBy('lastUpdated', 'desc')
     );
 
     const unsubscribe = onSnapshot(
@@ -175,6 +178,7 @@ export default function Home() {
             id: doc.id,
             name: data.name || `Canteen ${doc.id}`,
             crowdLevel: data.crowdLevel || data.crowd_level || 'Unknown',
+            // Converts Firestore Timestamp to a readable ISO string for your time formatter
             lastUpdated: data.lastUpdated ? data.lastUpdated.toDate().toISOString() : null,
           };
         });
@@ -183,7 +187,6 @@ export default function Home() {
       },
       (error) => {
         console.error('Firestore listener error:', error);
-        setDirectoryItems([]);
         setDirectoryLoading(false);
       }
     );
@@ -553,10 +556,10 @@ export default function Home() {
                           normalized === 'low'
                             ? 'bg-emerald-100 text-emerald-900'
                             : normalized === 'medium'
-                            ? 'bg-amber-100 text-amber-900'
-                            : normalized === 'high'
-                            ? 'bg-rose-100 text-rose-900'
-                            : 'bg-slate-100 text-slate-700';
+                              ? 'bg-amber-100 text-amber-900'
+                              : normalized === 'high'
+                                ? 'bg-rose-100 text-rose-900'
+                                : 'bg-slate-100 text-slate-700';
 
                         return (
                           <button
@@ -761,10 +764,10 @@ export default function Home() {
                 {submitting
                   ? 'Submitting…'
                   : submitStatus === 'success'
-                  ? '✓ Submitted'
-                  : submitStatus === 'error'
-                  ? 'Retry'
-                  : 'Submit report'}
+                    ? '✓ Submitted'
+                    : submitStatus === 'error'
+                      ? 'Retry'
+                      : 'Submit report'}
               </button>
 
               {formFeedback ? <p className="text-sm text-[var(--muted)]">{formFeedback}</p> : null}
