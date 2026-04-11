@@ -195,40 +195,30 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    setDirectoryLoading(true);
+
+    // CHANGE: Listen to the 'reports' collection directly since that's where your data is
     const reportsQuery = query(
       collection(firestore, 'reports'),
       orderBy('timestamp', 'desc')
     );
 
-    const unsubscribeReports = onSnapshot(
-      reportsQuery,
-      (snapshot) => {
-        const counts = {};
-        snapshot.docs.forEach((doc) => {
-          const data = doc.data();
-          const canteenName = data.canteen_name || 'Unknown';
-          counts[canteenName] = (counts[canteenName] || 0) + 1;
-        });
+    const unsubscribe = onSnapshot(reportsQuery, (snapshot) => {
+      const items = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          // Match the field names from your screenshot
+          name: data.canteen_name || `Canteen ${data.canteen_id}`,
+          crowdLevel: data.crowd_level || 'Unknown',
+          lastUpdated: data.timestamp ? data.timestamp.toDate().toISOString() : null,
+        };
+      });
+      setDirectoryItems(items);
+      setDirectoryLoading(false);
+    });
 
-        const totalReports = snapshot.size;
-        let topCanteen = 'None';
-        let topCount = 0;
-
-        Object.entries(counts).forEach(([name, count]) => {
-          if (count > topCount) {
-            topCount = count;
-            topCanteen = `${name} (${count})`;
-          }
-        });
-
-        setReportSummary({ totalReports, topCanteen });
-      },
-      (error) => {
-        console.error('Firestore reports listener error:', error);
-      }
-    );
-
-    return () => unsubscribeReports();
+    return () => unsubscribe();
   }, []);
 
   const totalReports = reportSummary.totalReports;
