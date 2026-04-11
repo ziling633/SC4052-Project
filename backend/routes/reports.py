@@ -1,84 +1,90 @@
 """
-Report submission endpoints
+Report submission endpoints - Refactored for Phase 2
 """
-from fastapi import APIRouter, HTTPException
-from google.cloud import firestore # Corrected import for Timestamp handling
 from datetime import datetime
+from fastapi import APIRouter, HTTPException, Request
+
+# Native Firebase/Google Cloud imports
+from google.cloud import firestore
+
+# Project internal imports
 from models import ReportRequest, ReportResponse
 from database import get_db
+from services.rate_limiter import global_rate_limiter
 
 router = APIRouter(prefix="/api/v1")
 
-VALID_LEVELS = ["Low", "Medium", "High"]
-
-@router.post("/report", status_code=201, response_model=ReportResponse)
-async def submit_report(request: ReportRequest):
+@router.post("/report", response_model=ReportResponse)
+async def submit_report(request_payload: ReportRequest, request: Request):
     """
-    Submit a crowd report for a canteen
-    
-    - **canteen_id**: ID of the canteen (1-14)
-    - **crowd_level**: One of "Low", "Medium", "High"
-    - **source**: Optional, "manual" or "vision-ai" (default: "manual")
+    Submit a crowd report with rate limiting and database validation.
     """
     try:
         db = get_db()
+        # Use the client's IP address as a unique identifier for rate limiting
+        user_host = request.client.host 
         
-        # 1. Validate crowd_level
-        if request.crowd_level not in VALID_LEVELS:
+        # 1. Check Rate Limiter (3 reports / 5 minutes)
+        if not global_rate_limiter.is_allowed(user_host):
+            retry_after = global_rate_limiter.get_retry_after(user_host)
             raise HTTPException(
-                status_code=400,
-                detail=f"Invalid crowd_level. Must be one of {VALID_LEVELS}. Got: {request.crowd_level}"
+                status_code=429, 
+                detail={
+                    "message": "Too many reports. Please wait before submitting again.",
+                    "retry_after_seconds": retry_after
+                }
             )
         
-        # 2. Validate canteen_id exists
-        canteen_ref = db.collection("canteens").document(request.canteen_id)
-        if not canteen_ref.get().exists:
+        # 2. Validate that the canteen exists
+        canteen_ref = db.collection("canteens").document(request_payload.canteen_id)
+        canteen_doc = canteen_ref.get()
+        if not canteen_doc.exists:
             raise HTTPException(
                 status_code=404,
-                detail=f"Canteen with ID {request.canteen_id} not found"
+                detail=f"Canteen ID {request_payload.canteen_id} does not exist"
             )
         
-        # 3. Create report document
+        # 3. Prepare and save the report document
         report_data = {
-            "canteen_id": request.canteen_id,
-            "crowd_level": request.crowd_level,
-            "source": request.source,
-            # FIX: Use SERVER_TIMESTAMP to resolve the 'no attribute Timestamp' error
+            "canteen_id": request_payload.canteen_id,
+            "canteen_name": canteen_doc.to_dict().get("name", "Unknown"),
+            "crowd_level": request_payload.crowd_level,
+            "source": request_payload.source or "manual",
             "timestamp": firestore.SERVER_TIMESTAMP,
             "user_id": "anon_user"
         }
         
-        doc_ref = db.collection("reports").document()
-        doc_ref.set(report_data)
+        new_report_ref = db.collection("reports").document()
+        new_report_ref.set(report_data)
 
-        # 4. Trigger Canteen Metadata Update
-        # This allows the frontend to sort by 'lastUpdated' instantly
+        # 4. Sync metadata to Canteen document for quick sorting/previews
         canteen_ref.update({
             "lastUpdated": firestore.SERVER_TIMESTAMP,
-            "crowdLevel": request.crowd_level # Update the single-point-of-truth field
+            "currentCrowdLevel": request_payload.crowd_level 
         })
         
         return ReportResponse(
             status="success",
             message="Report submitted successfully",
-            report_id=doc_ref.id,
-            timestamp=datetime.now().isoformat() + "Z"
+            report_id=new_report_ref.id,
+            timestamp=datetime.now(datetime.timezone.utc).isoformat() + "Z"
         )
         
     except HTTPException:
+        # Re-raise FastAPI-specific errors (429, 404, etc.)
         raise
     except Exception as e:
         print(f"❌ Error submitting report: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Internal server error: {str(e)}"
+            detail="An internal error occurred while saving your report."
         )
 
 @router.get("/health")
 async def health_check():
-    """Health check endpoint"""
+    """Health check endpoint for monitoring tools"""
     return {
         "status": "ok",
-        "message": "Campus-Flow API is running",
-        "timestamp": datetime.now().isoformat() + "Z"
+        "message": "Campus-Flow API is healthy",
+        "timestamp": datetime.now(datetime.timezone.utc).isoformat()
     }
