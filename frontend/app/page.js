@@ -42,6 +42,15 @@ export default function Home() {
   const aiTimeout = useRef(null);
   const formRef = useRef(null);
 
+  const fileToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result.split(',')[1]); // Strip the prefix
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
   // --- EFFECTS ---
   useEffect(() => {
     const oneHourAgo = new Date();
@@ -187,12 +196,29 @@ export default function Home() {
       window.clearTimeout(aiTimeout.current);
     }
 
-    aiTimeout.current = window.setTimeout(() => {
-      const predicted = simulateAIClassification(file);
-      setSelectedLevel(predicted);
-      setAiHint(`✅ AI suggestion applied: ${predicted}`);
-      aiTimeout.current = null;
-    }, 1400);
+    const handleFileChange = async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      setSelectedFile(file);
+      setAiHint('🧠 AI is analyzing crowd density...');
+
+      try {
+        const base64 = await fileToBase64(file);
+
+        const response = await fetch('/api/analyze-crowd', {
+          method: 'POST',
+          body: JSON.stringify({ imageBase64: base64 }),
+        });
+
+        const data = await response.json();
+
+        setSelectedLevel(data.level);
+        setAiHint(`✅ AI Detection: ${data.level} Density (${data.reasoning})`);
+      } catch (err) {
+        setAiHint('❌ AI Analysis failed. Please select manually.');
+      }
+    };
   };
 
   const handleSubmit = async (event) => {

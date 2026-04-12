@@ -45,3 +45,5 @@ __pycache__/
 venv/
 .env
 firebase-key.json
+
+GOOGLE_API_KEY=AIzaSyAVsW7mrv_lEFAcX11NscUj6NSHp6Bwi8Q
