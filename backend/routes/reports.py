@@ -10,7 +10,7 @@ from google.cloud import firestore
 # Project internal imports
 from models import ReportRequest, ReportResponse
 from database import get_db
-from services.rate_limiter import global_rate_limiter
+from logic.rate_limiter import global_rate_limiter
 
 router = APIRouter(prefix="/api/v1")
 
