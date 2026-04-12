@@ -97,6 +97,11 @@ export default function Home() {
     return `${Math.floor(hours / 24)}d ago`;
   }
 
+  const openCanteenModal = (item) => {
+    setActiveCanteen(item);
+    setModalOpen(true);
+  };
+
   const closeCanteenModal = () => {
     setModalOpen(false);
     setActiveCanteen(null);
