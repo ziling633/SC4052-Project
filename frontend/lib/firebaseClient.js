@@ -1,5 +1,6 @@
-import { initializeApp, getApps } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app'; // Added getApp here
 import { getFirestore } from 'firebase/firestore';
+import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: 'AIzaSyDpJu3xQJkNT8PU1QuZy9Z9IoLECAofvwI',
@@ -10,9 +11,8 @@ const firebaseConfig = {
   appId: '1:895744101915:web:6f97fe627c5757d48932be',
   measurementId: 'G-GBMNW36Q14',
 };
+const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-if (!getApps().length) {
-  initializeApp(firebaseConfig);
-}
-
-export const firestore = getFirestore();
+// It is best practice to pass the 'app' to these services
+export const firestore = getFirestore(app);
+export const storage = getStorage(app);

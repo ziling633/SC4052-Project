@@ -4,6 +4,8 @@ import { motion } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
 import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp } from 'firebase/firestore';
 import { firestore } from '../lib/firebaseClient';
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { storage } from '../lib/firebaseClient';
 
 import { normalizeLevel, simulateAIClassification, getCanteenId } from '../lib/utils';
 import {
@@ -194,6 +196,22 @@ export default function Home() {
   };
 
   const handleSubmit = async (event) => {
+
+    const canteenId = getCanteenId(selectedCanteen);
+
+    const uploadImage = async (file) => {
+      if (!file) return null;
+
+      // 1. Create a unique path for the image
+      const storageRef = ref(storage, `vision-reports/${Date.now()}_${file.name}`);
+
+      // 2. Upload the binary data (the "multipart" concept we discussed)
+      const snapshot = await uploadBytes(storageRef, file);
+
+      // 3. Get the public URL to save in your database
+      return await getDownloadURL(snapshot.ref);
+    };
+
     event.preventDefault();
     setFormFeedback('');
     setSubmitStatus('idle');
@@ -214,26 +232,38 @@ export default function Home() {
       return;
     }
 
-    const canteenId = getCanteenId(selectedCanteen);
-    if (!canteenId) {
-      setFormFeedback('Invalid canteen selection.');
-      return;
-    }
+
+
 
     setSubmitting(true);
     setSubmitStatus('submitting');
-
+    const imageUrl = await uploadImage(selectedFile);
     try {
+      setSubmitting(true);
+
+      // 1. MUST use 'await' here. If you don't, imageUrl will be a Promise, not a string.
+      const imageUrl = await uploadImage(selectedFile);
+
       await addDoc(collection(firestore, 'reports'), {
         canteen_id: canteenId,
         canteen_name: selectedCanteen,
         crowd_level: level,
         source: selectedFile ? 'vision-ai' : 'manual',
-        image_name: selectedFile?.name || null,
-        image_type: selectedFile?.type || null,
-        image_size: selectedFile?.size || null,
+        image_url: imageUrl, // Now this contains the actual link
         timestamp: serverTimestamp(),
       });
+
+      // Reset states...
+      setSubmitStatus('success');
+    } catch (error) {
+      console.error("Upload Error:", error); // Check your F12 browser console for this!
+      setSubmitStatus('error');
+    } finally {
+      setSubmitting(false); // This ensures the button doesn't stay stuck
+    }
+    try {
+      const imageUrl = await uploadImage(selectedFile);
+
 
       await fetchStatus();
       setFormFeedback('Report submitted successfully. Dashboard refreshed.');
