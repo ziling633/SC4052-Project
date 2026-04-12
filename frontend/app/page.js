@@ -1,101 +1,22 @@
 "use client";
 
 import { motion } from 'framer-motion';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp } from 'firebase/firestore';
 import { firestore } from '../lib/firebaseClient';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000/api/v1';
-
-const CANTEEN_NAMES = [
-  'Canteen 1', 'Canteen 2', 'Canteen 4', 'Canteen 9', 'Canteen 11',
-  'Canteen 14', 'Canteen 16', 'North Hill Food Court', 'Crescent Food Court',
-  'Northspine food court (Canteen A)', 'Southspine food court (Canteen B)',
-  'Quad Cafe', 'Pioneer Food Court', 'Nanyang Crescent Food Court'
-];
-
-const MAP_COORDINATES = [
-  { id: '1', label: 'C1', top: '30%', left: '72%' },
-  { id: '2', label: 'C2', top: '18%', left: '62%' },
-  { id: '3', label: 'C4', top: '68%', left: '65%' },
-  { id: '4', label: 'C9', top: '8%', left: '53%' },
-  { id: '5', label: 'C11', top: '45%', left: '30%' },
-  { id: '6', label: 'C14', top: '15%', left: '45%' },
-  { id: '7', label: 'C16', top: '25%', left: '55%' },
-  { id: '8', label: 'NH', top: '10%', left: '75%' },
-  { id: '9', label: 'CR', top: '40%', left: '20%' },
-  { id: '10', label: 'NSA', top: '22%', left: '35%' },
-  { id: '11', label: 'SSB', top: '60%', left: '40%' },
-  { id: '12', label: 'QC', top: '55%', left: '35%' },
-  { id: '13', label: 'PFC', top: '80%', left: '80%' },
-  { id: '14', label: 'NCFC', top: '12%', left: '65%' },
-];
-
-const CANTEEN_VISUALS = {
-  'North Spine Food Court (Koufu)': { image: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1000&q=80', blur: 10 },
-  'South Spine Food Court (Fine Food)': { image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1000&q=80', blur: 6 },
-  'Food Court @ NIE': { image: 'https://images.unsplash.com/photo-1498654896293-37aacf113fd9?auto=format&fit=crop&w=1000&q=80', blur: 12 },
-  'Canteen 1 (Hall 1)': { image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1000&q=80', blur: 8 },
-  'Canteen 2 (Hall 2)': { image: 'https://images.unsplash.com/photo-1454789548928-9efd52dc4031?auto=format&fit=crop&w=1000&q=80', blur: 5 },
-  'Canteen 4 (Hall 4)': { image: 'https://images.unsplash.com/photo-1555992336-03a23c52cdd2?auto=format&fit=crop&w=1000&q=80', blur: 14 },
-  'Canteen 5 (Hall 5)': { image: 'https://images.unsplash.com/photo-1498837167922-ddd27525d352?auto=format&fit=crop&w=1000&q=80', blur: 9 },
-  'Canteen 9 (Hall 9)': { image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1000&q=80', blur: 7 },
-};
-
-const getCanteenVisual = (name) => CANTEEN_VISUALS[name] || { image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1000&q=80', blur: 8 };
-
-const getMarkerColor = (crowdLevel) => {
-  const normalized = String(crowdLevel || '').toLowerCase();
-  if (normalized === 'low') return { bg: 'bg-emerald-400', border: 'border-emerald-500', text: 'text-emerald-900', glow: 'bg-emerald-300/40' };
-  if (normalized === 'medium') return { bg: 'bg-amber-400', border: 'border-amber-500', text: 'text-amber-900', glow: 'bg-amber-300/40' };
-  if (normalized === 'high') return { bg: 'bg-rose-500', border: 'border-rose-600', text: 'text-white', glow: 'bg-rose-400/40' };
-  return { bg: 'bg-slate-300', border: 'border-slate-400', text: 'text-slate-700', glow: 'bg-slate-300/40' };
-};
-
-const levelStyles = {
-  Low: 'bg-emerald-400 text-emerald-900',
-  Medium: 'bg-amber-300 text-amber-950',
-  High: 'bg-rose-500 text-white',
-  Unknown: 'bg-slate-300 text-slate-700',
-};
-
-function normalizeLevel(value) {
-  if (!value) return 'Unknown';
-  const normalized = String(value).toLowerCase();
-  if (normalized === 'low') return 'Low';
-  if (normalized === 'medium') return 'Medium';
-  if (normalized === 'high') return 'High';
-  return 'Unknown';
-}
-
-function simulateAIClassification(file) {
-  if (!file) return 'Unknown';
-  const mod = file.size % 3;
-  if (mod === 0) return 'Low';
-  if (mod === 1) return 'Medium';
-  return 'High';
-}
-
-function formatRelativeTime(isoString) {
-  if (!isoString) return 'No data';
-  const date = new Date(isoString);
-  if (Number.isNaN(date.getTime())) return 'Unknown';
-
-  const diff = Math.max(0, Math.round((Date.now() - date.getTime()) / 1000));
-  if (diff < 60) return `${diff}s ago`;
-  const minutes = Math.floor(diff / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
-
-function getCanteenId(name) {
-  const index = CANTEEN_NAMES.indexOf(name);
-  return index >= 0 ? String(index + 1) : null;
-}
+import { normalizeLevel, simulateAIClassification, getCanteenId } from '../lib/utils';
+import {
+  API_BASE,
+  CANTEEN_NAMES,
+  MAP_COORDINATES,
+  getCanteenVisual,
+  getMarkerColor,
+  levelStyles
+} from '../lib/constants';
 
 export default function Home() {
+  // --- STATE DECLARATIONS (deduplicated) ---
   const [statusList, setStatusList] = useState([]);
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [statusError, setStatusError] = useState('');
@@ -105,17 +26,6 @@ export default function Home() {
   const [privacyFilterEnabled, setPrivacyFilterEnabled] = useState(false);
   const [activeCanteen, setActiveCanteen] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
-
-  const openCanteenModal = (canteen) => {
-    setActiveCanteen(canteen);
-    setModalOpen(true);
-  };
-
-  const closeCanteenModal = () => {
-    setModalOpen(false);
-    setActiveCanteen(null);
-  };
-
   const [selectedCanteen, setSelectedCanteen] = useState('');
   const [selectedLevel, setSelectedLevel] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
@@ -129,6 +39,68 @@ export default function Home() {
 
   const aiTimeout = useRef(null);
   const formRef = useRef(null);
+
+  // --- EFFECTS ---
+  useEffect(() => {
+    const oneHourAgo = new Date();
+    oneHourAgo.setHours(oneHourAgo.getHours() - 1);
+
+    const reportsQuery = query(
+      collection(firestore, 'reports'),
+      orderBy('timestamp', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(reportsQuery, (snapshot) => {
+      const allReports = snapshot.docs.map(doc => doc.data());
+      const recentReports = allReports.filter(report => {
+        const ts = report.timestamp?.toDate();
+        return ts && ts > oneHourAgo;
+      });
+
+      const canteenCounts = {};
+      recentReports.forEach(report => {
+        if (report.crowd_level === 'High') {
+          const name = report.canteen_name || "Unknown";
+          canteenCounts[name] = (canteenCounts[name] || 0) + 1;
+        }
+      });
+
+      let mostActive = 'None';
+      let maxHighReports = 0;
+      for (const [name, count] of Object.entries(canteenCounts)) {
+        if (count > maxHighReports) {
+          maxHighReports = count;
+          mostActive = name;
+        }
+      }
+
+      setReportSummary({
+        totalReports: recentReports.length,
+        topCanteen: mostActive
+      });
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  function formatRelativeTime(isoString) {
+    if (!isoString) return 'No data';
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) return 'Unknown';
+
+    const diff = Math.max(0, Math.round((Date.now() - date.getTime()) / 1000));
+    if (diff < 60) return `${diff}s ago`;
+    const minutes = Math.floor(diff / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.floor(hours / 24)}d ago`;
+  }
+
+  const closeCanteenModal = () => {
+    setModalOpen(false);
+    setActiveCanteen(null);
+  };
 
   const fetchStatus = async () => {
     setLoadingStatus(true);
@@ -163,41 +135,6 @@ export default function Home() {
   useEffect(() => {
     setDirectoryLoading(true);
 
-    // Sorting by 'lastUpdated' in descending order so newest reports appear first
-    const canteensQuery = query(
-      collection(firestore, 'canteens'),
-      orderBy('lastUpdated', 'desc')
-    );
-
-    const unsubscribe = onSnapshot(
-      canteensQuery,
-      (snapshot) => {
-        const items = snapshot.docs.map((doc) => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            name: data.name || `Canteen ${doc.id}`,
-            crowdLevel: data.crowdLevel || data.crowd_level || 'Unknown',
-            // Converts Firestore Timestamp to a readable ISO string for your time formatter
-            lastUpdated: data.lastUpdated ? data.lastUpdated.toDate().toISOString() : null,
-          };
-        });
-        setDirectoryItems(items);
-        setDirectoryLoading(false);
-      },
-      (error) => {
-        console.error('Firestore listener error:', error);
-        setDirectoryLoading(false);
-      }
-    );
-
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    setDirectoryLoading(true);
-
-    // CHANGE: Listen to the 'reports' collection directly since that's where your data is
     const reportsQuery = query(
       collection(firestore, 'reports'),
       orderBy('timestamp', 'desc')
@@ -208,7 +145,6 @@ export default function Home() {
         const data = doc.data();
         return {
           id: doc.id,
-          // Match the field names from your screenshot
           name: data.canteen_name || `Canteen ${data.canteen_id}`,
           crowdLevel: data.crowd_level || 'Unknown',
           lastUpdated: data.timestamp ? data.timestamp.toDate().toISOString() : null,
@@ -335,18 +271,13 @@ export default function Home() {
     );
   };
 
+  // --- JSX (unchanged) ---
   return (
     <>
       <style>{`
         @keyframes pulse-ring {
-          0% {
-            transform: scale(1);
-            opacity: 1;
-          }
-          100% {
-            transform: scale(2);
-            opacity: 0;
-          }
+          0% { transform: scale(1); opacity: 1; }
+          100% { transform: scale(2); opacity: 0; }
         }
         .pulse-marker {
           animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
@@ -466,21 +397,9 @@ export default function Home() {
                   </div>
                   <div className="space-y-6">
                     {[
-                      {
-                        number: '01',
-                        label: 'Natural Textures',
-                        description: 'The subtle variations in crowd density that create the unique atmosphere of each canteen space.',
-                      },
-                      {
-                        number: '02',
-                        label: 'Architectural Flow',
-                        description: 'How building layouts influence movement patterns and social interactions within spaces.',
-                      },
-                      {
-                        number: '03',
-                        label: 'Temporal Rhythms',
-                        description: 'The ebb and flow of activity throughout the academic day, shaped by class schedules and meal times.',
-                      },
+                      { number: '01', label: 'Natural Textures', description: 'The subtle variations in crowd density that create the unique atmosphere of each canteen space.' },
+                      { number: '02', label: 'Architectural Flow', description: 'How building layouts influence movement patterns and social interactions within spaces.' },
+                      { number: '03', label: 'Temporal Rhythms', description: 'The ebb and flow of activity throughout the academic day, shaped by class schedules and meal times.' },
                     ].map((item) => (
                       <div key={item.number} className="flex items-start gap-6 rounded-[1.5rem] border border-[rgba(33,18,8,0.06)] bg-[var(--bg-soft)] p-6">
                         <div className="text-2xl font-semibold text-[var(--primary)]">{item.number}</div>
@@ -543,12 +462,9 @@ export default function Home() {
                       directoryItems.map((item) => {
                         const normalized = item.crowdLevel?.toLowerCase() || 'unknown';
                         const statusStyles =
-                          normalized === 'low'
-                            ? 'bg-emerald-100 text-emerald-900'
-                            : normalized === 'medium'
-                              ? 'bg-amber-100 text-amber-900'
-                              : normalized === 'high'
-                                ? 'bg-rose-100 text-rose-900'
+                          normalized === 'low' ? 'bg-emerald-100 text-emerald-900'
+                            : normalized === 'medium' ? 'bg-amber-100 text-amber-900'
+                              : normalized === 'high' ? 'bg-rose-100 text-rose-900'
                                 : 'bg-slate-100 text-slate-700';
 
                         return (
@@ -640,18 +556,9 @@ export default function Home() {
                       })}
                     </div>
                     <div className="mt-6 grid gap-3 text-sm text-[var(--muted)]">
-                      <div className="flex items-center gap-3">
-                        <span className="inline-flex h-3.5 w-3.5 rounded-full bg-emerald-400"></span>
-                        <span>Low crowd (Live)</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="inline-flex h-3.5 w-3.5 rounded-full bg-amber-400"></span>
-                        <span>Medium crowd (Live)</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="inline-flex h-3.5 w-3.5 rounded-full bg-rose-500"></span>
-                        <span>High crowd (Live)</span>
-                      </div>
+                      <div className="flex items-center gap-3"><span className="inline-flex h-3.5 w-3.5 rounded-full bg-emerald-400"></span><span>Low crowd (Live)</span></div>
+                      <div className="flex items-center gap-3"><span className="inline-flex h-3.5 w-3.5 rounded-full bg-amber-400"></span><span>Medium crowd (Live)</span></div>
+                      <div className="flex items-center gap-3"><span className="inline-flex h-3.5 w-3.5 rounded-full bg-rose-500"></span><span>High crowd (Live)</span></div>
                       <p className="mt-2 text-xs italic text-[var(--muted)]">Markers update in real-time from Firestore</p>
                     </div>
                   </div>
@@ -689,11 +596,11 @@ export default function Home() {
             <div className="mb-10 space-y-3">
               <div className="text-sm uppercase tracking-[0.28em] text-[var(--muted)] font-semibold">Admin Analytics</div>
               <h2 className="text-4xl font-semibold tracking-[-0.03em] text-[var(--text)]">Summary metrics at a glance</h2>
-              <p className="max-w-2xl text-base leading-8 text-[var(--muted)]">A clear overview of report volume, active locations, and participation over time.</p>
+              <p className="max-w-2xl text-base leading-8 text-[var(--muted)]">A clear overview of report volume, active locations, and participation in the past hour.</p>
             </div>
             <div className="grid gap-6 lg:grid-cols-2">
               <div className="rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white p-8 shadow-[0_20px_40px_rgba(33,18,8,0.05)]">
-                <p className="text-sm uppercase tracking-[0.3em] text-[var(--muted)]">Live report entries</p>
+                <p className="text-sm uppercase tracking-[0.3em] text-[var(--muted)]">Live report entries </p>
                 <p className="mt-4 text-4xl font-semibold text-[var(--text)]">{totalReports}</p>
               </div>
               <div className="rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white p-8 shadow-[0_20px_40px_rgba(33,18,8,0.05)]">
@@ -713,23 +620,13 @@ export default function Home() {
             </div>
             <form ref={formRef} onSubmit={handleSubmit} className="space-y-6 rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white p-8 shadow-[0_25px_50px_rgba(33,18,8,0.05)]">
               <label className="block text-sm font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Select canteen</label>
-              <select
-                value={selectedCanteen}
-                onChange={(event) => setSelectedCanteen(event.target.value)}
-                className="w-full rounded-3xl border border-[rgba(33,18,8,0.1)] bg-[var(--bg-soft)] px-5 py-4 text-sm text-[var(--text)] outline-none focus:border-[var(--primary)]"
-              >
+              <select value={selectedCanteen} onChange={(e) => setSelectedCanteen(e.target.value)} className="w-full rounded-3xl border border-[rgba(33,18,8,0.1)] bg-[var(--bg-soft)] px-5 py-4 text-sm text-[var(--text)] outline-none focus:border-[var(--primary)]">
                 <option value="">Choose canteen</option>
-                {CANTEEN_NAMES.map((name) => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
+                {CANTEEN_NAMES.map((name) => <option key={name} value={name}>{name}</option>)}
               </select>
 
               <label className="block text-sm font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Select crowd level</label>
-              <select
-                value={selectedLevel}
-                onChange={(event) => setSelectedLevel(event.target.value)}
-                className="w-full rounded-3xl border border-[rgba(33,18,8,0.1)] bg-[var(--bg-soft)] px-5 py-4 text-sm text-[var(--text)] outline-none focus:border-[var(--primary)]"
-              >
+              <select value={selectedLevel} onChange={(e) => setSelectedLevel(e.target.value)} className="w-full rounded-3xl border border-[rgba(33,18,8,0.1)] bg-[var(--bg-soft)] px-5 py-4 text-sm text-[var(--text)] outline-none focus:border-[var(--primary)]">
                 <option value="">Choose level</option>
                 <option value="Low">Low</option>
                 <option value="Medium">Medium</option>
@@ -737,27 +634,12 @@ export default function Home() {
               </select>
 
               <label className="block text-sm font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Upload image (optional)</label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleFileChange}
-                className="w-full rounded-3xl border border-[rgba(33,18,8,0.1)] bg-[var(--bg-soft)] px-5 py-4 text-sm text-[var(--text)] outline-none"
-              />
+              <input type="file" accept="image/*" onChange={handleFileChange} className="w-full rounded-3xl border border-[rgba(33,18,8,0.1)] bg-[var(--bg-soft)] px-5 py-4 text-sm text-[var(--text)] outline-none" />
 
               <p className="text-sm leading-7 text-[var(--muted)]">{aiHint}</p>
 
-              <button
-                type="submit"
-                disabled={submitting}
-                className="inline-flex w-full items-center justify-center rounded-full bg-[var(--primary)] px-6 py-4 text-sm font-semibold uppercase tracking-[0.22em] text-white transition hover:bg-[var(--accent)] disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                {submitting
-                  ? 'Submitting…'
-                  : submitStatus === 'success'
-                    ? '✓ Submitted'
-                    : submitStatus === 'error'
-                      ? 'Retry'
-                      : 'Submit report'}
+              <button type="submit" disabled={submitting} className="inline-flex w-full items-center justify-center rounded-full bg-[var(--primary)] px-6 py-4 text-sm font-semibold uppercase tracking-[0.22em] text-white transition hover:bg-[var(--accent)] disabled:cursor-not-allowed disabled:bg-slate-300">
+                {submitting ? 'Submitting…' : submitStatus === 'success' ? '✓ Submitted' : submitStatus === 'error' ? 'Retry' : 'Submit report'}
               </button>
 
               {formFeedback ? <p className="text-sm text-[var(--muted)]">{formFeedback}</p> : null}
@@ -775,22 +657,9 @@ export default function Home() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8 backdrop-blur-sm">
             <div className="relative w-full max-w-3xl overflow-hidden rounded-[2rem] bg-white shadow-[0_35px_80px_rgba(33,18,8,0.18)]">
               <div className="relative h-64 overflow-hidden">
-                <div
-                  className="absolute inset-0 bg-cover bg-center"
-                  style={{
-                    backgroundImage: `url(${getCanteenVisual(activeCanteen.name).image})`,
-                    filter: `blur(${getCanteenVisual(activeCanteen.name).blur}px) brightness(0.65)`,
-                  }}
-                />
+                <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${getCanteenVisual(activeCanteen.name).image})`, filter: `blur(${getCanteenVisual(activeCanteen.name).blur}px) brightness(0.65)` }} />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
-                <button
-                  type="button"
-                  onClick={closeCanteenModal}
-                  className="absolute right-4 top-4 z-20 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-[var(--text)] shadow-sm transition hover:bg-white pointer-events-auto"
-                  aria-label="Close canteen detail"
-                >
-                  ×
-                </button>
+                <button type="button" onClick={closeCanteenModal} className="absolute right-4 top-4 z-20 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-[var(--text)] shadow-sm transition hover:bg-white pointer-events-auto" aria-label="Close canteen detail">×</button>
                 <div className="relative z-10 flex h-full flex-col justify-end p-6 text-white">
                   <p className="text-sm uppercase tracking-[0.28em] text-white/80">Canteen detail</p>
                   <h3 className="mt-3 text-3xl font-semibold">{activeCanteen.name}</h3>
@@ -830,7 +699,7 @@ export default function Home() {
             <div className="grid gap-10 lg:grid-cols-[1.5fr_1fr_1fr]">
               <div className="space-y-5">
                 <p className="text-sm uppercase tracking-[0.3em] text-[var(--muted)]">The Tactile Curator</p>
-                <p className="max-w-md text-sm leading-7 text-[var(--muted)]">Exploring the intersection of architecture, human behavior, and academic spaces. A digital publication dedicated to understanding how physical environments shape our daily experiences.</p>
+                <p className="max-w-md text-sm leading-7 text-[var(--muted)]">Exploring the intersection of architecture, human behavior, and academic spaces.</p>
               </div>
               <div>
                 <h3 className="mb-4 text-sm uppercase tracking-[0.3em] text-[var(--muted)]">Navigate</h3>
@@ -852,7 +721,7 @@ export default function Home() {
               </div>
             </div>
             <div className="mt-12 border-t border-[rgba(33,18,8,0.08)] pt-8 text-sm leading-7 text-[var(--muted)]">
-              © 2026 NTU Crowd Monitoring • A tactile curation project exploring spatial dynamics in academic environments • Designed with intention for the thoughtful observer
+              © 2026 NTU Crowd Monitoring • A tactile curation project • Designed with intention
             </div>
           </div>
         </footer>
@@ -860,4 +729,3 @@ export default function Home() {
     </>
   );
 }
-
