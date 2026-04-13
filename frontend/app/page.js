@@ -91,7 +91,7 @@ const getCanteenVisual = (name) => CANTEEN_VISUALS[name] || { image: 'https://im
 
 const getMarkerColor = (crowdLevel, isStale = false) => {
   if (isStale) return { bg: 'bg-slate-300', border: 'border-slate-400', text: 'text-slate-700', glow: 'bg-slate-300/40' };
-  
+
   const normalized = String(crowdLevel || '').toLowerCase();
   if (normalized === 'low') return { bg: 'bg-emerald-400', border: 'border-emerald-500', text: 'text-emerald-900', glow: 'bg-emerald-300/40' };
   if (normalized === 'medium') return { bg: 'bg-amber-400', border: 'border-amber-500', text: 'text-amber-900', glow: 'bg-amber-300/40' };
@@ -146,11 +146,11 @@ function compressImage(file, maxWidth = 800, quality = 0.7) {
           width = maxWidth;
         }
 
-        canvas.width = width;a
+        canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
-        
+
         // Output as jpeg with specified quality
         resolve(canvas.toDataURL('image/jpeg', quality));
       };
@@ -200,7 +200,7 @@ function isDataStale(isoString) {
   if (!isoString) return true;
   const date = new Date(isoString);
   if (Number.isNaN(date.getTime())) return true;
-  
+
   const diffInMinutes = (Date.now() - date.getTime()) / (1000 * 60);
   return diffInMinutes > 120; // 120 minutes = 2 hours
 }
@@ -370,8 +370,8 @@ export default function Home() {
                     ? ts.toISOString()
                     : null;
 
-            latestByCanteen[canteenId] = { 
-              crowdLevel, 
+            latestByCanteen[canteenId] = {
+              crowdLevel,
               lastUpdated,
               imagePreview: data.image_preview || null,
               source: data.source || 'manual'
@@ -655,9 +655,8 @@ export default function Home() {
                 {[1, 2, 3].map((step) => (
                   <div
                     key={step}
-                    className={`w-2 h-2 rounded-full transition-colors ${
-                      step <= processingStep ? 'bg-[var(--primary)]' : 'bg-slate-200'
-                    }`}
+                    className={`w-2 h-2 rounded-full transition-colors ${step <= processingStep ? 'bg-[var(--primary)]' : 'bg-slate-200'
+                      }`}
                   ></div>
                 ))}
               </div>
@@ -712,7 +711,7 @@ export default function Home() {
         {/* 1. Change max-w-[92rem] to max-w-7xl (standard professional width) */}
         <section className="bg-[var(--bg-soft)] py-16 lg:py-24">
           <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-            
+
             <div className="mb-12 flex flex-col gap-4">
               <div className="text-sm uppercase tracking-[0.28em] text-[var(--muted)] font-semibold">
                 Spatial Intelligence
@@ -724,7 +723,7 @@ export default function Home() {
 
             {/* 2. Reduced the column ratio and removed the massive 44rem height */}
             <div className="grid gap-8 lg:grid-cols-[1.4fr_1fr] lg:items-stretch">
-              
+
               {/* 3. Changed min-h to a more reasonable 36rem for better vertical alignment */}
               <div className="flex h-full flex-col gap-6 rounded-[2.5rem] bg-white p-8 shadow-[0_30px_60px_rgba(33,18,8,0.06)] lg:min-h-[38rem]">
                 <div className="overflow-hidden rounded-[1.75rem] border border-[rgba(33,18,8,0.08)]">
@@ -858,19 +857,18 @@ export default function Home() {
                           normalized === 'low'
                             ? 'bg-emerald-100 text-emerald-900'
                             : normalized === 'medium'
-                            ? 'bg-amber-100 text-amber-900'
-                            : normalized === 'high'
-                            ? 'bg-rose-100 text-rose-900'
-                            : 'bg-slate-100 text-slate-700';
+                              ? 'bg-amber-100 text-amber-900'
+                              : normalized === 'high'
+                                ? 'bg-rose-100 text-rose-900'
+                                : 'bg-slate-100 text-slate-700';
 
                         return (
                           <button
                             key={item.id}
                             type="button"
                             onClick={() => openCanteenModal(item)}
-                            className={`group w-full rounded-[1.75rem] border border-[rgba(33,18,8,0.06)] px-5 py-4 text-left transition hover:shadow-lg ${
-                              item.isStale ? 'bg-slate-50 opacity-70' : 'bg-[var(--bg-soft)]'
-                            }`}
+                            className={`group w-full rounded-[1.75rem] border border-[rgba(33,18,8,0.06)] px-5 py-4 text-left transition hover:shadow-lg ${item.isStale ? 'bg-slate-50 opacity-70' : 'bg-[var(--bg-soft)]'
+                              }`}
                           >
                             <div className="flex items-center justify-between gap-4">
                               <div>
@@ -880,17 +878,16 @@ export default function Home() {
                                 </p>
                               </div>
                               {item.isStale ? (
-                                <button
-                                  type="button"
+                                <div
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     alert(`Redirects to Submit Report for ${item.name}`);
                                     window.location.hash = 'report';
                                   }}
-                                  className="rounded-full border border-black/20 bg-transparent px-4 py-2 text-[10px] font-semibold uppercase tracking-widest text-[var(--text)] transition hover:bg-black hover:text-white"
+                                  className="rounded-full border border-black/20 bg-transparent px-4 py-2 text-[10px] font-semibold uppercase tracking-widest text-[var(--text)] transition hover:bg-black hover:text-white cursor-pointer"
                                 >
                                   Update Status
-                                </button>
+                                </div>
                               ) : (
                                 <span className={`inline-flex rounded-full px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.18em] ${statusStyles}`}>
                                   {item.crowdLevel || 'UNKNOWN'}
@@ -1098,10 +1095,10 @@ export default function Home() {
                 {submitting
                   ? 'Submitting…'
                   : submitStatus === 'success'
-                  ? '✓ Submitted'
-                  : submitStatus === 'error'
-                  ? 'Retry'
-                  : 'Submit report'}
+                    ? '✓ Submitted'
+                    : submitStatus === 'error'
+                      ? 'Retry'
+                      : 'Submit report'}
               </button>
 
               {formFeedback ? <p className="text-sm text-[var(--muted)]">{formFeedback}</p> : null}
@@ -1167,8 +1164,8 @@ export default function Home() {
                   <p className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">Live feed</p>
                   {activeCanteen.imagePreview ? (
                     <div className="mt-4 relative group">
-                      <img 
-                        src={activeCanteen.imagePreview} 
+                      <img
+                        src={activeCanteen.imagePreview}
                         alt={`Live feed from ${activeCanteen.name}`}
                         className="w-full h-48 object-cover rounded-2xl filter blur-[12px] transition duration-500 group-hover:blur-[8px]"
                       />
