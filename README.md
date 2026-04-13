@@ -2,11 +2,11 @@
 
 A sophisticated, real-time spatial intelligence platform for NTU, designed to monitor canteen crowd density while safeguarding student privacy.
 
-## 🌟 Overview
+## Overview
 
 CROWDBYTE synthesizes privacy-preserving engineering with real-time campus dynamics. It transforms crowdsourced observations into a shared campus resource, using edge-based redaction and anonymized aggregation to ensure individual identity is never compromised.
 
-## ✨ Key Features
+## Key Features
 
 - **Privacy-First Architecture**: 
   - **Edge-Based Redaction**: Student-uploaded photos are blurred/masked on the client-side before submission.
@@ -25,7 +25,7 @@ CROWDBYTE synthesizes privacy-preserving engineering with real-time campus dynam
   - Live tracking of report volume and participation.
   - Dynamic "Most Active Canteen" detection based on "High" crowd frequency.
 
-## 🛠️ Technology Stack
+## Technology Stack
 
 ### Frontend
 - **Framework**: Next.js 16 (App Router)
@@ -39,7 +39,7 @@ CROWDBYTE synthesizes privacy-preserving engineering with real-time campus dynam
 - **Security**: In-memory Rate Limiting (3 reports per 5 minutes per user)
 - **Validation**: Pydantic models for strict data integrity
 
-## 📂 Project Structure
+## Project Structure
 
 ```
 SC4052-Project/
@@ -58,7 +58,7 @@ SC4052-Project/
 └── README.md
 ```
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 - Node.js (v18+)
@@ -95,7 +95,7 @@ SC4052-Project/
    ```
    Open `http://localhost:3000`.
 
-## 📜 Privacy Protocol
+## Privacy Protocol
 
 CROWDBYTE operates under a strict privacy manifesto:
 1. **Redaction**: All facial data is masked at the edge.
