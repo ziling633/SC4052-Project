@@ -1,9 +1,10 @@
 "use client";
 
-import { motion } from 'framer-motion';
+import { motion, useInView } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { firestore } from '../lib/firebaseClient';
+import FadeInReveal from './FadeInReveal';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000/api/v1';
 
@@ -237,6 +238,19 @@ export default function Home() {
     setModalOpen(true);
   };
 
+  const goToSubmitReport = (canteenName) => {
+    setSelectedCanteen(canteenName);
+    setSelectedLevel('');
+    setSelectedFile(null);
+    setSelectedImagePreview(null);
+    setFormFeedback('');
+    setOpenDropdownKey(null);
+    window.location.hash = 'report';
+    window.setTimeout(() => {
+      document.getElementById('report')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
+  };
+
   const closeCanteenModal = () => {
     setModalOpen(false);
     setActiveCanteen(null);
@@ -257,6 +271,9 @@ export default function Home() {
 
   const aiTimeout = useRef(null);
   const formRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const [isDropActive, setIsDropActive] = useState(false);
+  const [openDropdownKey, setOpenDropdownKey] = useState(null);
 
   const fetchStatus = async () => {
     setLoadingStatus(true);
@@ -343,6 +360,7 @@ export default function Home() {
         const counts = {};
         const highCrowdCounts = {};
         const latestByCanteen = {};
+        const latestImageByCanteen = {};
         let latestImage = null;
 
         snapshot.docs.forEach((doc, index) => {
@@ -365,6 +383,12 @@ export default function Home() {
           }
 
           const canteenId = data.canteen_id;
+          if (canteenId && data.image_preview && !latestImageByCanteen[canteenId]) {
+            latestImageByCanteen[canteenId] = {
+              imagePreview: data.image_preview,
+              imageSource: data.source || 'manual',
+            };
+          }
           if (canteenId && !latestByCanteen[canteenId]) {
             const ts = data.timestamp;
             const lastUpdated =
@@ -380,8 +404,16 @@ export default function Home() {
               crowdLevel,
               lastUpdated,
               imagePreview: data.image_preview || null,
-              source: data.source || 'manual'
+              source: data.source || 'manual',
+              imageSource: data.image_preview ? (data.source || 'manual') : null,
             };
+          }
+        });
+
+        Object.entries(latestByCanteen).forEach(([canteenId, payload]) => {
+          if (!payload.imagePreview && latestImageByCanteen[canteenId]?.imagePreview) {
+            payload.imagePreview = latestImageByCanteen[canteenId].imagePreview;
+            payload.imageSource = latestImageByCanteen[canteenId].imageSource;
           }
         });
 
@@ -466,8 +498,7 @@ export default function Home() {
     return items;
   }, [directoryItems, latestReportsByCanteen, searchQuery, crowdFilter, sortBy]);
 
-  const handleFileChange = async (event) => {
-    const file = event.target.files?.[0] || null;
+  const processSelectedFile = async (file) => {
     setSelectedFile(file);
     setSelectedImagePreview(null);
     setFormFeedback('');
@@ -500,6 +531,18 @@ export default function Home() {
       setAiHint(`✅ AI suggestion applied: ${predicted}`);
       aiTimeout.current = null;
     }, 1400);
+  };
+
+  const handleFileChange = async (event) => {
+    const file = event.target.files?.[0] || null;
+    await processSelectedFile(file);
+  };
+
+  const handleFileDrop = async (event) => {
+    event.preventDefault();
+    setIsDropActive(false);
+    const file = event.dataTransfer.files?.[0] || null;
+    await processSelectedFile(file);
   };
 
   const handleSubmit = async (event) => {
@@ -636,6 +679,203 @@ export default function Home() {
     );
   };
 
+  const DirectorySkeleton = () => (
+    <div className="space-y-5">
+      {Array.from({ length: 5 }).map((_, idx) => (
+        <div key={idx} className="rounded-[1.75rem] border border-black/5 bg-black/5 p-5 animate-pulse">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-3">
+              <div className="h-4 w-44 rounded-xl bg-black/10" />
+              <div className="h-3 w-32 rounded-xl bg-black/10" />
+            </div>
+            <div className="h-7 w-24 rounded-full bg-black/10" />
+          </div>
+          <div className="mt-5 h-3 w-28 rounded-xl bg-black/10" />
+        </div>
+      ))}
+    </div>
+  );
+
+  const CountUpNumber = ({ value, durationMs = 1500 }) => {
+    const ref = useRef(null);
+    const inView = useInView(ref, { once: true, margin: '-50px' });
+    const [displayValue, setDisplayValue] = useState(0);
+
+    useEffect(() => {
+      if (!inView) return;
+      const target = Number(value) || 0;
+      let rafId = null;
+      const start = performance.now();
+      const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+
+      const tick = (now) => {
+        const elapsed = now - start;
+        const t = Math.min(1, elapsed / durationMs);
+        const next = Math.round(easeOut(t) * target);
+        setDisplayValue(next);
+        if (t < 1) rafId = requestAnimationFrame(tick);
+      };
+
+      rafId = requestAnimationFrame(tick);
+      return () => {
+        if (rafId) cancelAnimationFrame(rafId);
+      };
+    }, [inView, value, durationMs]);
+
+    return <span ref={ref}>{displayValue.toLocaleString()}</span>;
+  };
+
+  const CanteenDropdown = ({
+    value,
+    onChange,
+    options,
+    placeholder,
+    triggerClassName,
+    valueTextClassName,
+    menuClassName,
+    dropdownKey,
+  }) => {
+    const [localOpen, setLocalOpen] = useState(false);
+    const [activeIndex, setActiveIndex] = useState(-1);
+    const rootRef = useRef(null);
+    const normalizedOptions = useMemo(
+      () =>
+        (options || []).map((opt) =>
+          typeof opt === 'string' ? { value: opt, label: opt } : { value: opt.value, label: opt.label }
+        ),
+      [options]
+    );
+    const selectedOption = useMemo(
+      () => normalizedOptions.find((opt) => opt.value === value) || null,
+      [normalizedOptions, value]
+    );
+    const isControlled = Boolean(dropdownKey);
+    const open = isControlled ? openDropdownKey === dropdownKey : localOpen;
+    const setOpen = (next) => {
+      if (isControlled) {
+        setOpenDropdownKey(next ? dropdownKey : null);
+      } else {
+        setLocalOpen(next);
+      }
+    };
+
+    useEffect(() => {
+      if (!open) return;
+      const onPointerDown = (event) => {
+        if (!rootRef.current) return;
+        if (!rootRef.current.contains(event.target)) setOpen(false);
+      };
+      const onKeyDown = (event) => {
+        if (event.key === 'Escape') setOpen(false);
+      };
+      document.addEventListener('mousedown', onPointerDown);
+      document.addEventListener('keydown', onKeyDown);
+      return () => {
+        document.removeEventListener('mousedown', onPointerDown);
+        document.removeEventListener('keydown', onKeyDown);
+      };
+    }, [open, isControlled, dropdownKey]);
+
+    useEffect(() => {
+      if (!open) return;
+      const idx = normalizedOptions.findIndex((opt) => opt.value === value);
+      setActiveIndex(idx >= 0 ? idx : 0);
+    }, [open, normalizedOptions, value]);
+
+    const selectValue = (next) => {
+      onChange(next);
+      setOpen(false);
+    };
+
+    return (
+      <div ref={rootRef} className={`relative ${open ? 'z-[60]' : ''}`}>
+        <button
+          type="button"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          onClick={() => setOpen((prev) => !prev)}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowDown') {
+              event.preventDefault();
+              setOpen(true);
+              setActiveIndex((prev) => (prev >= 0 ? prev : 0));
+              return;
+            }
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              setOpen((prev) => !prev);
+              return;
+            }
+          }}
+          className={
+            triggerClassName ||
+            'flex w-full items-center justify-between gap-3 rounded-2xl border border-black/10 bg-[var(--bg-soft)] px-5 py-4 text-sm text-[var(--text)] outline-none transition-colors focus:border-[var(--primary)]'
+          }
+        >
+          <span className={`${value ? 'font-medium' : 'text-[var(--muted)]'} ${valueTextClassName || ''}`}>
+            {selectedOption?.label || placeholder}
+          </span>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            className={`h-4 w-4 text-[var(--muted)] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M6 9l6 6 6-6" />
+          </svg>
+        </button>
+
+        {open ? (
+          <div
+            role="listbox"
+            className={
+              menuClassName ||
+              'absolute left-0 right-0 z-[70] mt-2 max-h-72 overflow-auto rounded-xl border border-black/5 bg-white p-1 shadow-[0_10px_40px_rgba(0,0,0,0.08)]'
+            }
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                setActiveIndex((prev) => Math.min(normalizedOptions.length - 1, (prev < 0 ? 0 : prev) + 1));
+                return;
+              }
+              if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                setActiveIndex((prev) => Math.max(0, (prev < 0 ? 0 : prev) - 1));
+                return;
+              }
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                const next = normalizedOptions[activeIndex];
+                if (next) selectValue(next.value);
+                return;
+              }
+            }}
+          >
+            {normalizedOptions.map((opt, idx) => {
+              const isSelected = opt.value === value;
+              const isActive = idx === activeIndex;
+              return (
+                <div
+                  key={opt.value}
+                  role="option"
+                  aria-selected={isSelected}
+                  onMouseEnter={() => setActiveIndex(idx)}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => selectValue(opt.value)}
+                  className={`cursor-pointer select-none rounded-lg px-4 py-2.5 text-sm transition-colors duration-200 ${
+                    isActive ? 'bg-black/5' : ''
+                  } ${isSelected ? 'font-medium text-[var(--text)]' : 'text-[var(--text)] hover:bg-black/5'}`}
+                >
+                  {opt.label}
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
   return (
     <>
       <style>{`
@@ -653,14 +893,14 @@ export default function Home() {
           animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
       `}</style>
-      <header className="sticky top-0 z-50 border-b border-[rgba(33,18,8,0.08)] bg-[rgba(246,241,232,0.96)] backdrop-blur-sm">
+      <header className="sticky top-0 z-50 border-b border-black/5 bg-[#F9F7F2]/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <div className="text-sm uppercase tracking-[0.4em] text-[var(--muted)] font-semibold">CROWDBYTE</div>
           <nav className="hidden md:flex items-center gap-8 text-sm uppercase tracking-[0.25em] text-[var(--muted)]">
-            <a href="#landing" className="transition hover:text-[var(--text)]">Home</a>
-            <a href="#dashboard" className="transition hover:text-[var(--text)]">Dashboard</a>
-            <a href="#report" className="transition hover:text-[var(--text)]">Submit Report</a>
-            <a href="#admin" className="transition hover:text-[var(--text)]">Analytics</a>
+            <a href="#landing" className="transition-colors hover:text-[var(--text)]">Home</a>
+            <a href="#dashboard" className="transition-colors hover:text-[var(--text)]">Dashboard</a>
+            <a href="#report" className="transition-colors hover:text-[var(--text)]">Submit Report</a>
+            <a href="#admin" className="transition-colors hover:text-[var(--text)]">Analytics</a>
           </nav>
         </div>
       </header>
@@ -702,7 +942,7 @@ export default function Home() {
         <section id="landing" className="bg-[var(--bg)] pb-24 pt-16">
           <div className="mx-auto max-w-7xl px-6">
             <div className="grid gap-16 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
-              <div className="space-y-8">
+              <FadeInReveal className="space-y-8">
                 <div className="text-xs uppercase tracking-[0.34em] text-[var(--muted)] font-semibold">
                   Campus-Flow-as-a-Service
                 </div>
@@ -715,19 +955,22 @@ export default function Home() {
                   </p>
                 </div>
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                  <a href="#dashboard" className="inline-flex w-full items-center justify-center rounded-full border border-[var(--text)] bg-white px-7 py-3 text-sm font-semibold uppercase tracking-[0.22em] text-[var(--text)] transition hover:bg-[var(--text)] hover:text-white sm:w-auto">
+                  <a
+                    href="#dashboard"
+                    className="inline-flex w-full items-center justify-center rounded-full border border-[var(--text)] bg-white px-7 py-3 text-sm font-semibold uppercase tracking-[0.22em] text-[var(--text)] transition-all duration-300 ease-out hover:scale-[1.01] hover:bg-[var(--text)] hover:text-white hover:shadow-lg sm:w-auto"
+                  >
                     Explore dashboard
                   </a>
                   <a href="#report" className="inline-flex w-full items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-soft)] px-7 py-3 text-sm font-semibold uppercase tracking-[0.22em] text-[var(--text)] transition hover:bg-white sm:w-auto">
                     Submit report
                   </a>
                 </div>
-              </div>
+              </FadeInReveal>
 
               <div className="relative overflow-hidden rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white shadow-[0_40px_80px_rgba(33,18,8,0.06)]">
                 <div className="grid grid-cols-2 grid-rows-2 gap-4 p-4 sm:p-6">
-                  <img className="h-64 w-full rounded-3xl object-cover shadow-lg transition duration-500 hover:scale-105 sm:h-72" src="https://images.unsplash.com/photo-1571171637578-041f4a2d3a72?auto=format&fit=crop&w=800&q=80" alt="NTU study" />
-                  <img className="h-64 w-full rounded-3xl object-cover shadow-lg transition duration-500 hover:scale-105 sm:h-72" src="https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=800&q=80" alt="Campus life" />
+                  <img className="h-64 w-full rounded-3xl object-cover shadow-lg transition duration-500 hover:scale-105 sm:h-72" src="https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?auto=format&fit=crop&w=800&q=80" alt="NTU study" />
+                  <img className="h-64 w-full rounded-3xl object-cover shadow-lg transition duration-500 hover:scale-105 sm:h-72" src="https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=800&q=80" alt="Campus life" />
                   <img className="h-64 w-full rounded-3xl object-cover shadow-lg transition duration-500 hover:scale-105 sm:h-72" src="https://images.unsplash.com/photo-1541339907198-e08756dedf3f?auto=format&fit=crop&w=800&q=80" alt="Students studying" />
                   <img className="h-64 w-full rounded-3xl object-cover shadow-lg transition duration-500 hover:scale-105 sm:h-72" src="https://images.unsplash.com/photo-1565688534245-05d6b5be184a?auto=format&fit=crop&w=800&q=80" alt="University building" />
                 </div>
@@ -753,10 +996,10 @@ export default function Home() {
             <div className="grid gap-8 lg:grid-cols-[1.4fr_1fr] lg:items-stretch">
 
               {/* 3. Changed min-h to a more reasonable 36rem for better vertical alignment */}
-              <div className="flex h-full flex-col gap-6 rounded-[2.5rem] bg-white p-8 shadow-[0_30px_60px_rgba(33,18,8,0.06)] lg:min-h-[38rem]">
+              <FadeInReveal className="flex h-full flex-col gap-6 rounded-[2.5rem] bg-white p-8 shadow-[0_30px_60px_rgba(33,18,8,0.06)] transition-all duration-300 ease-out hover:scale-[1.01] hover:shadow-lg lg:min-h-[38rem]">
                 <div className="overflow-hidden rounded-[1.75rem] border border-[rgba(33,18,8,0.08)]">
                   {/* Proportional image height */}
-                  <img className="h-[20rem] w-full object-cover sm:h-[24rem]" src="..." alt="Anonymized analytics" />
+                  <img className="h-[20rem] w-full object-cover sm:h-[24rem]" src="https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=1200&q=80" alt="Anonymized analytics" />
                 </div>
                 <div className="space-y-4 mt-2">
                   <div className="text-xs uppercase tracking-[0.34em] text-[var(--muted)] font-semibold">Anonymized Analytics</div>
@@ -764,11 +1007,11 @@ export default function Home() {
                     Where precision analytics meets student privacy. A study in anonymized movement and spatial utility across NTU.
                   </p>
                 </div>
-              </div>
+              </FadeInReveal>
 
               {/* 4. Right side column - adjusted to match the 38rem height */}
               <div className="flex h-full flex-col gap-6 lg:min-h-[38rem]">
-                <div className="flex flex-1 flex-col justify-between rounded-[2.5rem] bg-[var(--primary)] p-8 shadow-[0_30px_60px_rgba(33,18,8,0.08)] text-white">
+                <FadeInReveal delay={0.15} className="flex flex-1 flex-col justify-between rounded-[2.5rem] bg-[var(--primary)] p-8 shadow-[0_30px_60px_rgba(33,18,8,0.08)] text-white transition-all duration-300 ease-out hover:scale-[1.01] hover:shadow-lg">
                   <div className="space-y-4">
                     <div className="text-sm uppercase tracking-[0.28em] text-white/70 font-semibold">Privacy is a feature we architect.</div>
                     <p className="text-lg leading-relaxed font-medium">
@@ -777,15 +1020,15 @@ export default function Home() {
                   </div>
                   <button 
                     onClick={() => setPrivacyModalOpen(true)}
-                    className="mt-8 inline-flex w-full items-center justify-center rounded-full border border-white/20 bg-white/10 px-8 py-4 text-xs font-bold uppercase tracking-[0.22em] transition hover:bg-white hover:text-[var(--primary)] sm:w-fit"
+                    className="mt-8 inline-flex w-full items-center justify-center rounded-full border border-white/20 bg-white/10 px-8 py-4 text-xs font-bold uppercase tracking-[0.22em] transition-all duration-300 ease-out hover:scale-[1.01] hover:bg-white hover:text-[var(--primary)] hover:shadow-lg sm:w-fit"
                   >
                     View privacy protocol
                   </button>
-                </div>
+                </FadeInReveal>
 
                 {/* Small cards section */}
                 <div className="grid flex-1 gap-6 sm:grid-cols-2 lg:grid-cols-1">
-                  <div className="flex flex-col rounded-[1.75rem] border border-[rgba(33,18,8,0.08)] bg-white p-6 shadow-[0_20px_40px_rgba(33,18,8,0.04)]">
+                  <FadeInReveal delay={0.25} className="flex flex-col rounded-[1.75rem] border border-[rgba(33,18,8,0.08)] bg-white p-6 shadow-[0_20px_40px_rgba(33,18,8,0.04)] transition-all duration-300 ease-out hover:scale-[1.01] hover:shadow-lg">
                     <img
                       className="mb-5 h-44 w-full rounded-[1.4rem] object-cover"
                       src="https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=900&q=80"
@@ -793,8 +1036,8 @@ export default function Home() {
                     />
                     <div className="text-sm uppercase tracking-[0.25em] text-[var(--muted)] font-semibold">Campus Pulse</div>
                     <p className="mt-3 text-sm leading-7 text-[var(--muted)]">Monitoring group dynamics across NTU&apos;s social and academic landscapes.</p>
-                  </div>
-                  <div className="flex flex-col rounded-[1.75rem] border border-[rgba(33,18,8,0.08)] bg-white p-6 shadow-[0_20px_40px_rgba(33,18,8,0.04)]">
+                  </FadeInReveal>
+                  <FadeInReveal delay={0.25} className="flex flex-col rounded-[1.75rem] border border-[rgba(33,18,8,0.08)] bg-white p-6 shadow-[0_20px_40px_rgba(33,18,8,0.04)] transition-all duration-300 ease-out hover:scale-[1.01] hover:shadow-lg">
                     <img
                       className="mb-5 h-44 w-full rounded-[1.4rem] object-cover"
                       src="https://images.unsplash.com/photo-1526498460520-4c246339dccb?auto=format&fit=crop&w=900&q=80"
@@ -802,7 +1045,7 @@ export default function Home() {
                     />
                     <div className="text-sm uppercase tracking-[0.25em] text-[var(--muted)] font-semibold">Historical Insights</div>
                     <p className="mt-3 text-sm leading-7 text-[var(--muted)]">Identifying long-term patterns of canteen utilisation.</p>
-                  </div>
+                  </FadeInReveal>
                 </div>
               </div>
             </div>
@@ -837,7 +1080,7 @@ export default function Home() {
                         description: 'A decentralized service model that transforms individual dining observations into a shared, high-value campus resource.',
                       },
                     ].map((item) => (
-                      <div key={item.number} className="flex items-start gap-6 rounded-[1.5rem] border border-[rgba(33,18,8,0.06)] bg-[var(--bg-soft)] p-6">
+                      <div key={item.number} className="flex items-start gap-6 rounded-[1.5rem] border border-[rgba(33,18,8,0.06)] bg-[var(--bg-soft)] p-6 transition-all duration-300 ease-out hover:scale-[1.01] hover:shadow-lg">
                         <div className="text-2xl font-semibold text-[var(--primary)]">{item.number}</div>
                         <div>
                           <h3 className="text-base font-semibold tracking-[0.02em] text-[var(--text)]">{item.label}</h3>
@@ -849,7 +1092,7 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="relative overflow-hidden rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white shadow-[0_30px_60px_rgba(33,18,8,0.06)]">
+              <div className="relative overflow-hidden rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white shadow-[0_30px_60px_rgba(33,18,8,0.06)] transition-all duration-300 ease-out hover:scale-[1.01] hover:shadow-lg">
                 <img className="aspect-[4/3] w-full object-cover" src="https://images.unsplash.com/photo-1481627834876-b7833e8f5570?auto=format&fit=crop&w=900&q=80" alt="Architecture book" />
                 <div className="absolute left-6 top-6 max-w-xs rounded-[1.75rem] border border-[rgba(33,18,8,0.06)] bg-[rgba(255,255,255,0.96)] p-6 shadow-xl">
                   <p className="text-sm italic leading-7 text-[var(--text)]">"The strength of a community is found in its ability to share insights while safeguarding the privacy of its members."</p>
@@ -884,31 +1127,45 @@ export default function Home() {
                   />
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
-                  <select
-                    value={crowdFilter}
-                    onChange={(e) => setCrowdFilter(e.target.value)}
-                    className="rounded-full bg-[var(--bg-soft)] px-5 py-3 text-xs font-bold uppercase tracking-widest outline-none transition hover:bg-slate-100"
-                  >
-                    <option value="all">All Levels</option>
-                    <option value="low">Low Crowd</option>
-                    <option value="medium">Medium Crowd</option>
-                    <option value="high">High Crowd</option>
-                  </select>
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value)}
-                    className="rounded-full bg-[var(--bg-soft)] px-5 py-3 text-xs font-bold uppercase tracking-widest outline-none transition hover:bg-slate-100"
-                  >
-                    <option value="name">Sort by Name</option>
-                    <option value="latest">Sort by Latest</option>
-                  </select>
+                  <div className="min-w-[12rem]">
+                    <CanteenDropdown
+                      value={crowdFilter}
+                      onChange={(value) => setCrowdFilter(value)}
+                      dropdownKey="dashboard-crowdFilter"
+                      options={[
+                        { value: 'all', label: 'All Levels' },
+                        { value: 'low', label: 'Low Crowd' },
+                        { value: 'medium', label: 'Medium Crowd' },
+                        { value: 'high', label: 'High Crowd' },
+                      ]}
+                      placeholder="All Levels"
+                      triggerClassName="flex w-full items-center justify-between gap-3 rounded-full bg-[var(--bg-soft)] px-5 py-3 text-xs font-bold uppercase tracking-widest outline-none transition-colors hover:bg-slate-100 border border-black/10"
+                      valueTextClassName="uppercase tracking-widest text-xs"
+                      menuClassName="absolute left-0 right-0 mt-2 max-h-72 overflow-auto rounded-xl border border-black/5 bg-white p-1 shadow-[0_10px_40px_rgba(0,0,0,0.08)]"
+                    />
+                  </div>
+                  <div className="min-w-[12rem]">
+                    <CanteenDropdown
+                      value={sortBy}
+                      onChange={(value) => setSortBy(value)}
+                      dropdownKey="dashboard-sortBy"
+                      options={[
+                        { value: 'name', label: 'Sort by Name' },
+                        { value: 'latest', label: 'Sort by Latest' },
+                      ]}
+                      placeholder="Sort by Name"
+                      triggerClassName="flex w-full items-center justify-between gap-3 rounded-full bg-[var(--bg-soft)] px-5 py-3 text-xs font-bold uppercase tracking-widest outline-none transition-colors hover:bg-slate-100 border border-black/10"
+                      valueTextClassName="uppercase tracking-widest text-xs"
+                      menuClassName="absolute left-0 right-0 mt-2 max-h-72 overflow-auto rounded-xl border border-black/5 bg-white p-1 shadow-[0_10px_40px_rgba(0,0,0,0.08)]"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
 
             <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-[1.2fr_1fr]">
               <div className="grid gap-6">
-                <div className="rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white p-8 shadow-[0_20px_40px_rgba(33,18,8,0.05)]">
+                <div className="rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white p-8 shadow-[0_20px_40px_rgba(33,18,8,0.05)] transition-all duration-300 ease-out hover:scale-[1.01] hover:shadow-lg">
                   <div className="flex items-center justify-between gap-4">
                     <div>
                       <p className="text-sm uppercase tracking-[0.28em] text-[var(--muted)]">Directory</p>
@@ -916,9 +1173,9 @@ export default function Home() {
                     </div>
                     <span className="inline-flex rounded-full bg-[var(--bg-soft)] px-4 py-2 text-xs uppercase tracking-[0.24em] text-[var(--muted)]">Live</span>
                   </div>
-                  <div className="mt-8 space-y-5">
+                  <FadeInReveal className="mt-8 space-y-5">
                     {directoryLoading ? (
-                      <div className="rounded-[1.75rem] border border-[rgba(33,18,8,0.06)] bg-[var(--bg-soft)] p-5 text-sm text-[var(--muted)]">Listening for live canteen updates...</div>
+                      <DirectorySkeleton />
                     ) : mergedDirectoryItems.length > 0 ? (
                       mergedDirectoryItems.map((item) => {
                         const normalized = item.crowdLevel?.toLowerCase() || 'unknown';
@@ -932,11 +1189,18 @@ export default function Home() {
                                 : 'bg-slate-100 text-slate-700';
 
                         return (
-                          <button
+                          <div
                             key={item.id}
-                            type="button"
+                            role="button"
+                            tabIndex={0}
                             onClick={() => openCanteenModal(item)}
-                            className={`group w-full rounded-[1.75rem] border border-[rgba(33,18,8,0.06)] px-5 py-4 text-left transition hover:shadow-lg ${item.isStale ? 'bg-slate-50 opacity-70' : 'bg-[var(--bg-soft)]'
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                openCanteenModal(item);
+                              }
+                            }}
+                            className={`group w-full cursor-pointer rounded-[1.75rem] border border-[rgba(33,18,8,0.06)] px-5 py-4 text-left transition-all duration-300 ease-out hover:scale-[1.01] hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-black/10 ${item.isStale ? 'bg-slate-50 opacity-70' : 'bg-[var(--bg-soft)]'
                               }`}
                           >
                             <div className="flex items-center justify-between gap-4">
@@ -947,16 +1211,16 @@ export default function Home() {
                                 </p>
                               </div>
                               {item.isStale ? (
-                                <div
+                                <button
+                                  type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    alert(`Redirects to Submit Report for ${item.name}`);
-                                    window.location.hash = 'report';
+                                    goToSubmitReport(item.name);
                                   }}
-                                  className="rounded-full border border-black/20 bg-transparent px-4 py-2 text-[10px] font-semibold uppercase tracking-widest text-[var(--text)] transition hover:bg-black hover:text-white cursor-pointer"
+                                  className="rounded-full border border-black/20 bg-transparent px-4 py-2 text-[10px] font-semibold uppercase tracking-widest text-[var(--text)] transition-all duration-300 ease-out hover:scale-[1.02] hover:bg-black hover:text-white hover:shadow-lg cursor-pointer"
                                 >
                                   Update Status
-                                </div>
+                                </button>
                               ) : (
                                 <span className={`inline-flex rounded-full px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.18em] ${statusStyles}`}>
                                   {item.crowdLevel || 'UNKNOWN'}
@@ -964,15 +1228,15 @@ export default function Home() {
                               )}
                             </div>
                             <div className="mt-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Tap for detail</div>
-                          </button>
+                          </div>
                         );
                       })
                     ) : (
                       <div className="rounded-[1.75rem] border border-[rgba(33,18,8,0.06)] bg-[var(--bg-soft)] p-5 text-sm text-[var(--muted)]">No directory items found in Firestore.</div>
                     )}
-                  </div>
+                  </FadeInReveal>
                 </div>
-                <div className="rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white p-8 shadow-[0_20px_40px_rgba(33,18,8,0.05)]">
+                <div className="rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white p-8 shadow-[0_20px_40px_rgba(33,18,8,0.05)] transition-all duration-300 ease-out hover:scale-[1.01] hover:shadow-lg">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <p className="text-sm uppercase tracking-[0.28em] text-[var(--muted)]">Privacy feed</p>
@@ -982,7 +1246,7 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setPrivacyFilterEnabled((prev) => !prev)}
-                      className={`inline-flex whitespace-nowrap rounded-full px-5 py-2 text-sm font-semibold uppercase tracking-[0.18em] transition ${privacyFilterEnabled ? 'bg-emerald-950 text-white' : 'bg-slate-100 text-[var(--text)] hover:bg-slate-200'}`}
+                      className={`inline-flex whitespace-nowrap rounded-full px-5 py-2 text-sm font-semibold uppercase tracking-[0.18em] transition-all duration-300 ease-out hover:scale-[1.01] hover:shadow-lg ${privacyFilterEnabled ? 'bg-emerald-950 text-white' : 'bg-slate-100 text-[var(--text)] hover:bg-slate-200'}`}
                     >
                       Privacy Filter: {privacyFilterEnabled ? 'On' : 'Off'}
                     </button>
@@ -1020,7 +1284,7 @@ export default function Home() {
               </div>
 
               <div className="grid gap-6">
-                <div className="rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white p-8 shadow-[0_20px_40px_rgba(33,18,8,0.05)]">
+                <div className="rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white p-8 shadow-[0_20px_40px_rgba(33,18,8,0.05)] transition-all duration-300 ease-out hover:scale-[1.01] hover:shadow-lg">
                   <div className="flex items-center justify-between gap-4">
                     <div>
                       <p className="text-sm uppercase tracking-[0.28em] text-[var(--muted)]">Map</p>
@@ -1036,6 +1300,7 @@ export default function Home() {
                         const isStale = canteenData?.isStale || false;
                         const lastUpdated = canteenData?.lastUpdated;
                         const colors = getMarkerColor(crowdLevel, isStale);
+                        const isHigh = !isStale && String(crowdLevel || '').toLowerCase() === 'high';
                         
                         // Smart Tooltip Position Logic
                         const topValue = parseFloat(marker.top);
@@ -1047,11 +1312,11 @@ export default function Home() {
                         return (
                           <div 
                             key={marker.label} 
-                            className="group absolute flex items-center justify-center cursor-help" 
-                            style={{ top: marker.top, left: marker.left, width: '3rem', height: '3rem', transform: 'translate(-50%, -50%)', zIndex: 10 }}
+                            className="group absolute z-10 flex items-center justify-center cursor-help hover:z-[999]" 
+                            style={{ top: marker.top, left: marker.left, width: '3rem', height: '3rem', transform: 'translate(-50%, -50%)' }}
                           >
-                            {/* Tooltip Wrapper - Adds a layer to ensure tooltip is above other dots */}
-                            <div className="absolute inset-0 z-[100] group-hover:z-[101]">
+                            {/* Tooltip Wrapper */}
+                            <div className="absolute inset-0">
                               <div className={`pointer-events-none absolute w-max scale-90 rounded-xl bg-slate-900/95 px-4 py-2.5 text-center text-white opacity-0 shadow-2xl transition duration-200 group-hover:scale-100 group-hover:opacity-100 ${
                                 showBelow ? 'top-full mt-3' : 'bottom-full mb-3'
                               } ${
@@ -1074,6 +1339,7 @@ export default function Home() {
                             </div>
 
                             <span className={`absolute inset-0 rounded-full ${colors.glow} blur-2xl transition duration-500 group-hover:blur-3xl`} />
+                            {isHigh ? <span className={`absolute inset-0 rounded-full ${colors.bg} opacity-75 animate-ping`} /> : null}
                             {!isStale && <span className={`absolute inset-0 rounded-full ${colors.bg} pulse-marker`} />}
                             <span className={`relative inline-flex h-10 w-10 items-center justify-center rounded-full border-2 ${colors.border} ${colors.bg} ${colors.text} shadow-[0_8px_20px_rgba(33,18,8,0.2)] text-[0.65rem] font-bold transition duration-300 group-hover:scale-110`}>
                               {marker.label}
@@ -1103,7 +1369,7 @@ export default function Home() {
                     </div>
                   </div>
                 </div>
-                <div className="rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white p-8 shadow-[0_20px_40px_rgba(33,18,8,0.05)]">
+                <div className="rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white p-8 shadow-[0_20px_40px_rgba(33,18,8,0.05)] transition-all duration-300 ease-out hover:scale-[1.01] hover:shadow-lg">
                   <p className="text-sm uppercase tracking-[0.28em] text-[var(--muted)]">System Metrics</p>
                   <h3 className="mt-4 text-2xl font-semibold text-[var(--text)]">Operational pulse</h3>
                   <p className="mt-3 text-sm leading-7 text-[var(--muted)]">Key processing metrics and anonymized throughput in the current study window.</p>
@@ -1114,7 +1380,7 @@ export default function Home() {
                       { value: '31h', label: 'Continuous uptime' },
                       { value: '92%', label: 'Anonymity preserved', tooltip: 'Calculated via USENIX 2020 privacy pipeline protocols' },
                     ].map((metric) => (
-                      <div key={metric.label} className="rounded-[1.75rem] bg-[var(--bg-soft)] p-5">
+                      <div key={metric.label} className="rounded-[1.75rem] bg-[var(--bg-soft)] p-5 transition-all duration-300 ease-out hover:scale-[1.01] hover:shadow-lg">
                         <p className="text-3xl font-semibold text-[var(--text)]">{metric.value}</p>
                         <p className="mt-2 flex items-center gap-2 text-sm uppercase tracking-[0.18em] text-[var(--muted)]">
                           {metric.label}
@@ -1139,11 +1405,11 @@ export default function Home() {
               <p className="max-w-2xl text-base leading-8 text-[var(--muted)]">A clear overview of report volume, active locations, and participation over time.</p>
             </div>
             <div className="grid gap-6 lg:grid-cols-2">
-              <div className="rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white p-8 shadow-[0_20px_40px_rgba(33,18,8,0.05)]">
+              <div className="rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white p-8 shadow-[0_20px_40px_rgba(33,18,8,0.05)] transition-all duration-300 ease-out hover:scale-[1.01] hover:shadow-lg">
                 <p className="text-sm uppercase tracking-[0.3em] text-[var(--muted)]">Live report entries</p>
-                <p className="mt-4 text-4xl font-semibold text-[var(--text)]">{totalReports}</p>
+                <p className="mt-4 text-4xl font-semibold text-[var(--text)]"><CountUpNumber value={totalReports} /></p>
               </div>
-              <div className="rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white p-8 shadow-[0_20px_40px_rgba(33,18,8,0.05)]">
+              <div className="rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white p-8 shadow-[0_20px_40px_rgba(33,18,8,0.05)] transition-all duration-300 ease-out hover:scale-[1.01] hover:shadow-lg">
                 <p className="text-sm uppercase tracking-[0.3em] text-[var(--muted)]">Most active canteen</p>
                 <p className="mt-4 text-4xl font-semibold text-[var(--text)]">{topCanteen}</p>
               </div>
@@ -1158,46 +1424,78 @@ export default function Home() {
               <h2 className="text-4xl font-semibold tracking-[-0.03em] text-[var(--text)]">Share what the canteens feel like now</h2>
               <p className="max-w-2xl mx-auto text-base leading-8 text-[var(--muted)]">Tell the campus how busy a canteen is using a quick report and optional photo.</p>
             </div>
-            <form ref={formRef} onSubmit={handleSubmit} className="space-y-6 rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white p-8 shadow-[0_25px_50px_rgba(33,18,8,0.05)]">
+            <form ref={formRef} onSubmit={handleSubmit} className="space-y-6 rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white p-8 shadow-[0_25px_50px_rgba(33,18,8,0.05)] transition-all duration-300 ease-out hover:scale-[1.01] hover:shadow-lg">
               <label className="block text-sm font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Select canteen (Required)</label>
-              <select
+              <CanteenDropdown
                 value={selectedCanteen}
-                onChange={(event) => setSelectedCanteen(event.target.value)}
-                required
-                className="w-full rounded-3xl border border-[rgba(33,18,8,0.1)] bg-[var(--bg-soft)] px-5 py-4 text-sm text-[var(--text)] outline-none focus:border-[var(--primary)]"
-              >
-                <option value="">Choose canteen</option>
-                {CANTEEN_NAMES.map((name) => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
+                onChange={(value) => setSelectedCanteen(value)}
+                dropdownKey="report-canteen"
+                options={CANTEEN_NAMES}
+                placeholder="Choose canteen"
+              />
 
               <label className="block text-sm font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Select crowd level</label>
-              <select
+              <CanteenDropdown
                 value={selectedLevel}
-                onChange={(event) => setSelectedLevel(event.target.value)}
-                className="w-full rounded-3xl border border-[rgba(33,18,8,0.1)] bg-[var(--bg-soft)] px-5 py-4 text-sm text-[var(--text)] outline-none focus:border-[var(--primary)]"
-              >
-                <option value="">Choose level</option>
-                <option value="Low">Low</option>
-                <option value="Medium">Medium</option>
-                <option value="High">High</option>
-              </select>
+                onChange={(value) => setSelectedLevel(value)}
+                dropdownKey="report-crowdLevel"
+                options={[
+                  { value: 'Low', label: 'Low' },
+                  { value: 'Medium', label: 'Medium' },
+                  { value: 'High', label: 'High' },
+                ]}
+                placeholder="Choose level"
+              />
 
               <label className="block text-sm font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Upload image (optional)</label>
               <input
+                ref={fileInputRef}
                 type="file"
                 accept="image/*"
                 onChange={handleFileChange}
-                className="w-full rounded-3xl border border-[rgba(33,18,8,0.1)] bg-[var(--bg-soft)] px-5 py-4 text-sm text-[var(--text)] outline-none"
+                hidden
               />
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => fileInputRef.current?.click()}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') fileInputRef.current?.click();
+                }}
+                onDragEnter={(event) => {
+                  event.preventDefault();
+                  setIsDropActive(true);
+                }}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                }}
+                onDragLeave={(event) => {
+                  event.preventDefault();
+                  setIsDropActive(false);
+                }}
+                onDrop={handleFileDrop}
+                className={`rounded-xl border-2 border-dashed p-6 text-center transition-all duration-300 ease-out hover:scale-[1.01] hover:shadow-lg ${
+                  isDropActive ? 'border-[var(--primary)] bg-black/5' : 'border-black/10 bg-[var(--bg-soft)]'
+                }`}
+              >
+                <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-black/5 text-[var(--muted)]">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-5 w-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M3 7h3l2-2h8l2 2h3v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />
+                  </svg>
+                </div>
+                <p className="mt-4 text-sm font-semibold uppercase tracking-[0.18em] text-[var(--text)]">Click or drag photo to anonymize</p>
+                <p className="mt-2 text-xs uppercase tracking-[0.22em] text-[var(--muted)]">
+                  {selectedFile ? selectedFile.name : 'PNG / JPG / WEBP'}
+                </p>
+              </div>
 
               <p className="text-sm leading-7 text-[var(--muted)]">{aiHint}</p>
 
               <button
                 type="submit"
                 disabled={submitting}
-                className="inline-flex w-full items-center justify-center rounded-full bg-[var(--primary)] px-6 py-4 text-sm font-semibold uppercase tracking-[0.22em] text-white transition hover:bg-[var(--accent)] disabled:cursor-not-allowed disabled:bg-slate-300"
+                className="inline-flex w-full items-center justify-center rounded-full bg-[var(--primary)] px-6 py-4 text-sm font-semibold uppercase tracking-[0.22em] text-white transition-all duration-300 ease-out hover:scale-[1.01] hover:bg-[var(--accent)] hover:shadow-lg disabled:cursor-not-allowed disabled:bg-slate-300"
               >
                 {submitting
                   ? 'Submitting…'
@@ -1256,19 +1554,19 @@ export default function Home() {
                   </div>
                   <div className="rounded-[1.5rem] bg-[var(--bg-soft)] p-5">
                     <p className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">Report source</p>
-                    <p className="mt-3 text-2xl font-semibold text-[var(--text)] capitalize">{activeCanteen.source || 'Firestore'}</p>
+                    <p className="mt-3 text-2xl font-semibold text-[var(--text)] capitalize">{(activeCanteen.imagePreview ? (activeCanteen.imageSource || activeCanteen.source) : activeCanteen.source) || 'Firestore'}</p>
                   </div>
                 </div>
                 <div className="rounded-[1.75rem] bg-[var(--bg-soft)] p-6">
                   <p className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">Privacy Metadata</p>
                   <div className="mt-3 space-y-2 text-sm leading-7 text-[var(--muted)]">
-                    <p><strong>Source:</strong> {activeCanteen.source === 'vision-ai' ? 'Vision AI Inference' : 'Student Report'}</p>
+                    <p><strong>Source:</strong> {(activeCanteen.imagePreview ? (activeCanteen.imageSource || activeCanteen.source) : activeCanteen.source) === 'vision-ai' ? 'Vision AI Inference' : 'Student Report'}</p>
                     <p><strong>Faces redacted:</strong> Via edge-processing simulation</p>
                     <p><strong>Anonymity preserved:</strong> 92% (USENIX 2020 protocols)</p>
                   </div>
                 </div>
                 <div className="rounded-[1.75rem] bg-[var(--bg-soft)] p-6 overflow-hidden">
-                  <p className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">Live feed</p>
+                  <p className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">Latest Live feed</p>
                   {activeCanteen.imagePreview ? (
                     <div className="mt-4 relative group">
                       <img
