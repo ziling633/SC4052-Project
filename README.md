@@ -1,109 +1,98 @@
-# CROWDBYTE: Privacy-Preserving Campus Flow
+# CROWDBYTE — Privacy‑Preserving Campus Flow
 
-A sophisticated, real-time spatial intelligence platform for NTU, designed to monitor canteen crowd density while safeguarding student privacy.
+CROWDBYTE is a Next.js + Firebase + FastAPI project for crowdsourced canteen crowd sensing, with a privacy-preserving UX (blurred previews, anonymized aggregation, and staleness handling for outdated data).
 
-## Overview
+## Architecture (current repo)
 
-CROWDBYTE synthesizes privacy-preserving engineering with real-time campus dynamics. It transforms crowdsourced observations into a shared campus resource, using edge-based redaction and anonymized aggregation to ensure individual identity is never compromised.
+- **Frontend**: Next.js (App Router) + Tailwind CSS + Framer Motion  
+  - Real-time UI is driven by Firestore listeners on `reports` (Directory, Map, Canteen modal, Privacy feed).
+  - Report submission uses a custom dropzone + client-side image compression before sending to the backend.
+- **Backend**: FastAPI (Python)  
+  - REST endpoints under `/api/v1` (see below).
+  - Validates report `canteen_id` against the `canteens` collection and writes `reports` documents.
+  - In-memory rate limit for report submission.
+- **Database**: Firebase Firestore  
+  - Collections used: `canteens`, `reports`.
 
-## Key Features
+## Firestore Collections (as used by code)
 
-- **Privacy-First Architecture**: 
-  - **Edge-Based Redaction**: Student-uploaded photos are blurred/masked on the client-side before submission.
-  - **Privacy Metadata**: Compliant with USENIX 2020 protocols for anonymized movement data.
-  - **Live Feed Anonymization**: Real-time previews in the dashboard are blurred to preserve privacy while showing volume trends.
-- **Intelligent Canteen Directory**:
-  - **Staleness Logic**: Data automatically "decays" and is marked as outdated if no report is received within 120 minutes.
-  - **"Request Pulse"**: Interactive prompts for users to update status when data becomes stale.
-- **Interactive Campus Collision Map**:
-  - Dynamic visual layout of NTU canteens with color-coded crowd indicators.
-  - Neutral "Outdated" state for canteens with expired data.
-- **Sophisticated Reporting System**:
-  - **AI-Assisted Classification**: Simulated AI analysis suggests crowd levels based on uploaded imagery.
-  - **Client-Side Compression**: High-resolution images are automatically resized and optimized to stay within database limits.
-- **Real-Time Analytics**:
-  - Live tracking of report volume and participation.
-  - Dynamic "Most Active Canteen" detection based on "High" crowd frequency.
+- **canteens** documents (document ID is a string canteen id)  
+  - Fields used: `name`, `location`, `lat`, `lng`, `lastUpdated` (seeded by scripts)
+- **reports** documents  
+  - Fields written by backend: `canteen_id`, `canteen_name`, `crowd_level`, `source`, `timestamp`, `user_id`  
+  - Optional image fields: `image_name`, `image_type`, `image_size`, `image_preview` (base64 data URL)
 
-## Technology Stack
+## Backend Endpoints
 
-### Frontend
-- **Framework**: Next.js 16 (App Router)
-- **Styling**: Tailwind CSS (Minimalist, Editorial Aesthetic)
-- **Animations**: Framer Motion
-- **State Management**: React Hooks + Firebase Real-time Listeners
+Defined in [canteens.py](backend/routes/canteens.py) and [reports.py](backend/routes/reports.py):
 
-### Backend
-- **Framework**: Next.js API Routes (Node.js environment)
-- **Database**: Google Cloud Firestore (Firebase)
-- **AI Inference**: Google Gemini 1.5 Flash API (Vision-to-Status pipeline)
-- **Security**: In-memory Rate Limiting (3 reports per 5 minutes per user)
-- **Validation**: Pydantic models for strict data integrity
-- **Archiecture**: Serverless Edge Functions handling secure API calls and prompt engineering.
+- `GET /api/v1/canteens/status` — aggregated status for all canteens
+- `GET /api/v1/canteens/{canteen_id}` — aggregated status for a single canteen
+- `POST /api/v1/report` — submit a report (optional image metadata)
+- `GET /api/v1/health` — health check
 
-## Project Structure
+## Frontend Features (implemented)
 
-```
-SC4052-Project/
-├── frontend/               # Next.js Application
-│   ├── app/                # App Router (Pages, Layouts, CSS)
-│   ├── lib/                # Constants, Firebase Client, Utils
-│   └── public/             # Static Assets
-├── backend/                # FastAPI Application
-│   ├── api/                # Route definitions
-│   ├── logic/              # Rate limiting, Crowd calculations
-│   ├── routes/             # Endpoint implementations
-│   ├── database.py         # Firebase initialization
-│   ├── main.py             # Entry point
-│   ├── models.py           # Pydantic Schemas
-│   └── requirements.txt    # Python dependencies
-└── README.md
-```
+- **Directory + Map from `reports`**: Directory and map use the latest `reports` per `canteen_id`.
+- **Staleness**: If the last report is older than 2 hours, canteens are treated as outdated (Directory shows “Update Status”; Map markers are neutral).
+- **Update Status flow**: Clicking “Update Status” scrolls to Submit Report and pre-selects the chosen canteen.
+- **Premium controls**: Custom dropdowns (no native `<select>`), custom dashed-border file dropzone, tactile hover states, and skeleton loaders.
+- **Map interactions**: Hover tooltips for “last updated”, and a ping effect for “High” crowd markers.
+- **Analytics**: “Live report entries” counts up on in-view.
+- **Reveal on scroll**: Major sections use `FadeInReveal` ([FadeInReveal.js](frontend/app/FadeInReveal.js)).
 
-## Getting Started
+## Privacy-Preserving Architecture (USENIX 2020 Alignment)
+CROWDBYTE is engineered with a strict privacy manifesto to decouple spatial analytics from individual identities:
+
+- **Edge-Based Redaction**: All facial data and PII in user-submitted photos are masked via client-side simulation before processing.
+
+- **Ephemeral Storage**: Raw imagery is purged immediately; only abstract crowd density indices (Low/Medium/High) are retained in the database.
+
+- **Staleness Invalidation**: Data automatically decays after 120 minutes, forcing a neutral state to prevent reliance on outdated tracking.
+
+## Local Development
 
 ### Prerequisites
-- Node.js (v18+)
-- Python 3.10+
-- Firebase Project with Firestore enabled
 
-### 1. Backend Setup
-1. Place your `firebase-key.json` in the `backend/` directory.
-2. Configure environment:
-   ```bash
-   cd backend
-   python -m venv .venv
-   source .venv/Scripts/activate # Windows: .venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
-3. Initialize the database:
-   ```bash
-   python setup_collections.py
-   python update_canteens.py
-   ```
-4. Start the API:
-   ```bash
-   python main.py
-   ```
-   API available at `http://localhost:8000`.
+- Node.js (for frontend)
+- Python 3.x (for backend)
+- A Firebase project with Firestore enabled
+- A Firebase Admin service-account JSON key
 
-### 2. Frontend Setup
-1. Configure `.env.local` with your Firebase credentials.
+### Backend (FastAPI)
+
+1. Put your service account key JSON at `backend/firebase-key.json` (default) or set `FIREBASE_CREDENTIALS` in `backend/.env` to the key path.
 2. Install and run:
-   ```bash
-   cd frontend
-   npm install
-   npm run dev
-   ```
-   Open `http://localhost:3000`.
 
-## Privacy Protocol
+```bash
+cd backend
+python -m venv .venv
+.venv\\Scripts\\activate
+pip install -r requirements.txt
+python main.py
+```
 
-CROWDBYTE operates under a strict privacy manifesto:
-1. **Redaction**: All facial data is masked at the edge.
-2. **Ephemerality**: Raw imagery is purged immediately after processing.
-3. **Anonymization**: Crowd levels are decoupled from individual identities.
-4. **Differential Privacy**: Statistical noise is used to prevent pattern-matching of student schedules.
+- API: `http://localhost:8000`
+- Docs: `http://localhost:8000/docs`
 
----
-© 2026 CROWDBYTE • Designed with technical rigour and ethical intention for Nanyang Technological University.
+Optional data scripts in `backend/`:
+
+- `python setup_collections.py` — initializes canteens (if empty) + adds a sample report
+- `python update_canteens.py` — upserts a fuller canteen set + updates report `canteen_name` for selected canteens
+- `python populate.py` — populates sample reports
+
+### Frontend (Next.js)
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+- Web: `http://localhost:3000`
+
+Firebase Web config is currently in [firebaseClient.js](frontend/lib/firebaseClient.js).
+
+## Notes / Non-integrated code
+
+- `backend/api/analyze-crowd/route.js` exists as a Node route that references Google Generative AI; it is not wired into the current frontend flow.
