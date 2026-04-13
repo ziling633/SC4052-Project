@@ -222,6 +222,11 @@ export default function Home() {
   const [modalOpen, setModalOpen] = useState(false);
   const [privacyModalOpen, setPrivacyModalOpen] = useState(false);
 
+  // Search, Filter, and Sort States for Directory
+  const [searchQuery, setSearchQuery] = useState('');
+  const [crowdFilter, setCrowdFilter] = useState('all'); // all, low, medium, high
+  const [sortBy, setSortBy] = useState('name'); // name, latest
+
   // New states for processing overlay
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState(0);
@@ -422,22 +427,44 @@ export default function Home() {
     [statusList]
   );
 
-  const mergedDirectoryItems = useMemo(
-    () =>
-      directoryItems.map((item) => {
-        const reportData = latestReportsByCanteen[item.id];
-        const lastUpdated = reportData?.lastUpdated || null;
-        return {
-          ...item,
-          crowdLevel: reportData?.crowdLevel || 'Unknown',
-          lastUpdated: lastUpdated,
-          imagePreview: reportData?.imagePreview || null,
-          source: reportData?.source || 'Firestore',
-          isStale: isDataStale(lastUpdated),
-        };
-      }),
-    [directoryItems, latestReportsByCanteen]
-  );
+  const mergedDirectoryItems = useMemo(() => {
+    let items = directoryItems.map((item) => {
+      const reportData = latestReportsByCanteen[item.id];
+      const lastUpdated = reportData?.lastUpdated || null;
+      return {
+        ...item,
+        crowdLevel: reportData?.crowdLevel || 'Unknown',
+        lastUpdated: lastUpdated,
+        imagePreview: reportData?.imagePreview || null,
+        source: reportData?.source || 'Firestore',
+        isStale: isDataStale(lastUpdated),
+      };
+    });
+
+    // 1. Search Filtering
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      items = items.filter((item) => item.name.toLowerCase().includes(query));
+    }
+
+    // 2. Crowd Level Filtering
+    if (crowdFilter !== 'all') {
+      items = items.filter((item) => item.crowdLevel.toLowerCase() === crowdFilter);
+    }
+
+    // 3. Sorting
+    items.sort((a, b) => {
+      if (sortBy === 'latest') {
+        const timeA = a.lastUpdated ? new Date(a.lastUpdated).getTime() : 0;
+        const timeB = b.lastUpdated ? new Date(b.lastUpdated).getTime() : 0;
+        return timeB - timeA; // Descending (most recent first)
+      }
+      // Default: sort by name
+      return a.name.localeCompare(b.name);
+    });
+
+    return items;
+  }, [directoryItems, latestReportsByCanteen, searchQuery, crowdFilter, sortBy]);
 
   const handleFileChange = async (event) => {
     const file = event.target.files?.[0] || null;
@@ -835,10 +862,48 @@ export default function Home() {
 
         <section id="dashboard" className="py-24 bg-[var(--bg-soft)]">
           <div className="mx-auto max-w-7xl px-6">
-            <div className="mb-10 space-y-3">
-              <div className="text-sm uppercase tracking-[0.28em] text-[var(--muted)] font-semibold">Dashboard</div>
-              <h2 className="text-4xl font-semibold tracking-[-0.03em] text-[var(--text)]">Campus Intelligence Dashboard</h2>
-              <p className="max-w-2xl text-base leading-8 text-[var(--muted)]">A refined operations view built for live flow analytics, privacy-aware reporting, and intelligent campus decision-making.</p>
+            <div className="mb-10 space-y-6">
+              <div className="space-y-3">
+                <div className="text-sm uppercase tracking-[0.28em] text-[var(--muted)] font-semibold">Dashboard</div>
+                <h2 className="text-4xl font-semibold tracking-[-0.03em] text-[var(--text)]">Campus Intelligence Dashboard</h2>
+                <p className="max-w-2xl text-base leading-8 text-[var(--muted)]">A refined operations view built for live flow analytics, privacy-aware reporting, and intelligent campus decision-making.</p>
+              </div>
+
+              {/* Atas Search, Filter, and Sort Controls */}
+              <div className="flex flex-col gap-4 rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white p-6 shadow-[0_20px_40px_rgba(33,18,8,0.05)] sm:flex-row sm:items-center">
+                <div className="relative flex-1">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="Search canteens..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full rounded-full bg-[var(--bg-soft)] py-3 pl-11 pr-6 text-sm font-medium outline-none transition focus:ring-2 focus:ring-slate-200"
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <select
+                    value={crowdFilter}
+                    onChange={(e) => setCrowdFilter(e.target.value)}
+                    className="rounded-full bg-[var(--bg-soft)] px-5 py-3 text-xs font-bold uppercase tracking-widest outline-none transition hover:bg-slate-100"
+                  >
+                    <option value="all">All Levels</option>
+                    <option value="low">Low Crowd</option>
+                    <option value="medium">Medium Crowd</option>
+                    <option value="high">High Crowd</option>
+                  </select>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="rounded-full bg-[var(--bg-soft)] px-5 py-3 text-xs font-bold uppercase tracking-widest outline-none transition hover:bg-slate-100"
+                  >
+                    <option value="name">Sort by Name</option>
+                    <option value="latest">Sort by Latest</option>
+                  </select>
+                </div>
+              </div>
             </div>
 
             <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-[1.2fr_1fr]">
@@ -969,12 +1034,50 @@ export default function Home() {
                         const canteenData = mergedDirectoryItems.find((item) => item.name === marker.id);
                         const crowdLevel = canteenData?.crowdLevel || 'Unknown';
                         const isStale = canteenData?.isStale || false;
+                        const lastUpdated = canteenData?.lastUpdated;
                         const colors = getMarkerColor(crowdLevel, isStale);
+                        
+                        // Smart Tooltip Position Logic
+                        const topValue = parseFloat(marker.top);
+                        const leftValue = parseFloat(marker.left);
+                        const showBelow = topValue < 30; // If marker is in the top 30%, show tooltip below it
+                        const shiftRight = leftValue < 30; // If marker is on the left 30%, shift tooltip right
+                        const shiftLeft = leftValue > 70; // If marker is on the right 30%, shift tooltip left
+
                         return (
-                          <div key={marker.label} className="absolute flex items-center justify-center" style={{ top: marker.top, left: marker.left, width: '3rem', height: '3rem', transform: 'translate(-50%, -50%)' }}>
-                            <span className={`absolute inset-0 rounded-full ${colors.glow} blur-2xl`} />
+                          <div 
+                            key={marker.label} 
+                            className="group absolute flex items-center justify-center cursor-help" 
+                            style={{ top: marker.top, left: marker.left, width: '3rem', height: '3rem', transform: 'translate(-50%, -50%)', zIndex: 10 }}
+                          >
+                            {/* Tooltip Wrapper - Adds a layer to ensure tooltip is above other dots */}
+                            <div className="absolute inset-0 z-[100] group-hover:z-[101]">
+                              <div className={`pointer-events-none absolute w-max scale-90 rounded-xl bg-slate-900/95 px-4 py-2.5 text-center text-white opacity-0 shadow-2xl transition duration-200 group-hover:scale-100 group-hover:opacity-100 ${
+                                showBelow ? 'top-full mt-3' : 'bottom-full mb-3'
+                              } ${
+                                shiftRight ? 'left-0 translate-x-0' : shiftLeft ? 'right-0 translate-x-0' : 'left-1/2 -translate-x-1/2'
+                              }`}>
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-white/60 mb-0.5">{marker.id}</p>
+                                <p className="text-xs font-semibold">
+                                  {isStale ? 'Outdated' : `${crowdLevel} crowd`}
+                                </p>
+                                <p className="mt-1 text-[9px] text-white/50 uppercase tracking-tighter">
+                                  {lastUpdated ? `Updated ${getDisplayLabel(lastUpdated)}` : 'No reports yet'}
+                                </p>
+                                {/* Arrow */}
+                                <div className={`absolute left-1/2 h-1.5 w-1.5 -translate-x-1/2 rotate-45 bg-slate-900/95 ${
+                                  showBelow ? 'bottom-full translate-y-1/2' : 'top-full -translate-y-1/2'
+                                } ${
+                                  shiftRight ? 'left-4' : shiftLeft ? 'left-auto right-4' : ''
+                                }`}></div>
+                              </div>
+                            </div>
+
+                            <span className={`absolute inset-0 rounded-full ${colors.glow} blur-2xl transition duration-500 group-hover:blur-3xl`} />
                             {!isStale && <span className={`absolute inset-0 rounded-full ${colors.bg} pulse-marker`} />}
-                            <span className={`relative inline-flex h-10 w-10 items-center justify-center rounded-full border-2 ${colors.border} ${colors.bg} ${colors.text} shadow-[0_8px_20px_rgba(33,18,8,0.2)] text-[0.65rem] font-bold`}>{marker.label}</span>
+                            <span className={`relative inline-flex h-10 w-10 items-center justify-center rounded-full border-2 ${colors.border} ${colors.bg} ${colors.text} shadow-[0_8px_20px_rgba(33,18,8,0.2)] text-[0.65rem] font-bold transition duration-300 group-hover:scale-110`}>
+                              {marker.label}
+                            </span>
                           </div>
                         );
                       })}
