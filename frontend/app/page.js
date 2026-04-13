@@ -230,7 +230,7 @@ export default function Home() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [selectedImagePreview, setSelectedImagePreview] = useState(null);
   const [latestUpload, setLatestUpload] = useState(null);
-  const [aiHint, setAiHint] = useState('AI inference currently off. Choose a level or upload image for auto suggestion.');
+  const [aiHint, setAiHint] = useState('AI inference ready. Choose a level or upload image for auto suggestion.');
   const [formFeedback, setFormFeedback] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState('idle');
@@ -915,7 +915,7 @@ export default function Home() {
                     ) : (
                       <div className="rounded-[1.75rem] border border-[rgba(33,18,8,0.06)] bg-[var(--bg-soft)] p-8 text-center">
                         <p className="text-sm font-semibold text-[var(--text)]">Access Restricted</p>
-                        <p className="mt-2 text-sm leading-7 text-[var(--muted)]">Raw data available to authorized personnel only.</p>
+                        <p className="mt-2 text-sm leading-7 text-[var(--muted)]">Raw data are not available to anyone.</p>
                       </div>
                     )}
                   </div>
