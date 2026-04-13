@@ -220,6 +220,7 @@ export default function Home() {
   const [privacyFilterEnabled, setPrivacyFilterEnabled] = useState(true); // Default to On
   const [activeCanteen, setActiveCanteen] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [privacyModalOpen, setPrivacyModalOpen] = useState(false);
 
   // New states for processing overlay
   const [isProcessing, setIsProcessing] = useState(false);
@@ -748,7 +749,10 @@ export default function Home() {
                       An anonymised manifest for the rhythms that shape our canteen.
                     </p>
                   </div>
-                  <button className="mt-8 inline-flex w-full items-center justify-center rounded-full border border-white/20 bg-white/10 px-8 py-4 text-xs font-bold uppercase tracking-[0.22em] transition hover:bg-white hover:text-[var(--primary)] sm:w-fit">
+                  <button 
+                    onClick={() => setPrivacyModalOpen(true)}
+                    className="mt-8 inline-flex w-full items-center justify-center rounded-full border border-white/20 bg-white/10 px-8 py-4 text-xs font-bold uppercase tracking-[0.22em] transition hover:bg-white hover:text-[var(--primary)] sm:w-fit"
+                  >
                     View privacy protocol
                   </button>
                 </div>
@@ -1140,7 +1144,7 @@ export default function Home() {
                   <h3 className="mt-3 text-3xl font-semibold">{activeCanteen.name}</h3>
                 </div>
               </div>
-              <div className="space-y-6 p-8">
+              <div className="space-y-6 p-8 overflow-y-auto max-h-[calc(100vh-20rem)]">
                 <div className="grid gap-4 sm:grid-cols-3">
                   <div className="rounded-[1.5rem] bg-[var(--bg-soft)] p-5">
                     <p className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">Crowd level</p>
@@ -1190,12 +1194,71 @@ export default function Home() {
           </div>
         ) : null}
 
+        {privacyModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8 backdrop-blur-sm">
+            <div className="relative w-full max-w-2xl overflow-hidden rounded-[2.5rem] bg-white shadow-[0_35px_80px_rgba(33,18,8,0.18)]">
+              <div className="bg-[var(--primary)] p-10 text-white">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-2">
+                    <p className="text-xs uppercase tracking-[0.3em] text-white/70 font-semibold">Security Protocol</p>
+                    <h3 className="text-3xl font-semibold tracking-tight">Privacy Engineering</h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPrivacyModalOpen(false)}
+                    className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
+                  >
+                    ×
+                  </button>
+                </div>
+                <p className="mt-6 text-sm leading-7 text-white/80 max-w-md">
+                  Version 2.4 (USENIX 2020 Compliance). Our framework ensures that spatial intelligence never comes at the cost of individual identity.
+                </p>
+              </div>
+              <div className="p-10 space-y-8 overflow-y-auto max-h-[calc(100vh-20rem)]">
+                {[
+                  {
+                    title: '01. Edge-Based Redaction',
+                    desc: 'Every student-contributed photo undergoes an immediate pixel-level masking process on the edge node. Faces and identifying marks are redacted before the data ever reaches our central storage.'
+                  },
+                  {
+                    title: '02. Ephemeral Data Lifecycle',
+                    desc: 'Raw imagery is processed in volatile memory and immediately purged. Our database only retains anonymized crowd indices and privacy-filtered previews for the live feed.'
+                  },
+                  {
+                    title: '03. Anonymized Aggregation',
+                    desc: 'Crowd levels are computed as abstract indices (Low/Medium/High), intentionally decoupling spatial density metrics from individual movement patterns or specific user identities.'
+                  },
+                  {
+                    title: '04. Differential Privacy',
+                    desc: 'We inject controlled statistical noise into long-term trend analysis. This prevents adversaries from reverse-engineering individual student schedules through pattern-matching.'
+                  }
+                ].map((item) => (
+                  <div key={item.title} className="space-y-3 border-l-2 border-[var(--bg-soft)] pl-6">
+                    <h4 className="text-sm font-bold uppercase tracking-[0.15em] text-[var(--text)]">{item.title}</h4>
+                    <p className="text-sm leading-7 text-[var(--muted)]">{item.desc}</p>
+                  </div>
+                ))}
+                
+                <div className="pt-4">
+                  <button 
+                    onClick={() => setPrivacyModalOpen(false)}
+                    className="w-full rounded-full bg-[var(--text)] py-4 text-xs font-bold uppercase tracking-[0.2em] text-white transition hover:opacity-90"
+                  >
+                    Acknowledge Protocol
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <footer className="border-t border-[rgba(33,18,8,0.08)] bg-[var(--bg-soft)] py-16">
           <div className="mx-auto max-w-7xl px-6">
             <div className="grid gap-10 lg:grid-cols-[1.5fr_1fr_1fr]">
               <div className="space-y-5">
-                <p className="text-sm uppercase tracking-[0.3em] text-[var(--muted)]">The Tactile Curator</p>
-                <p className="max-w-md text-sm leading-7 text-[var(--muted)]">Exploring the intersection of architecture, human behavior, and academic spaces. A digital publication dedicated to understanding how physical environments shape our daily experiences.</p>
+                <p className="text-sm uppercase tracking-[0.3em] text-[var(--muted)]">CROWDBYTE</p>
+                <p className="max-w-md text-sm leading-7 text-[var(--muted)]">Synthesizing privacy-preserving engineering with real-time campus dynamics. A digital initiative dedicated to understanding the rhythmic pulse of communal dining at NTU through anonymized, student-led reporting.</p>
               </div>
               <div>
                 <h3 className="mb-4 text-sm uppercase tracking-[0.3em] text-[var(--muted)]">Navigate</h3>
@@ -1217,7 +1280,7 @@ export default function Home() {
               </div>
             </div>
             <div className="mt-12 border-t border-[rgba(33,18,8,0.08)] pt-8 text-sm leading-7 text-[var(--muted)]">
-              © 2026 NTU Crowd Monitoring • A tactile curation project exploring spatial dynamics in academic environments • Designed with intention for the thoughtful observer
+              © 2026 CROWDBYTE • A privacy-first XaaS project exploring dining dynamics at Nanyang Technological University • Designed with technical rigour and ethical intention.
             </div>
           </div>
         </footer>
