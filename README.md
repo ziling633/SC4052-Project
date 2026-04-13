@@ -1,99 +1,107 @@
-# SC4052-Project
+# CROWDBYTE: Privacy-Preserving Campus Flow
 
-## CrowdByte: NTU Crowd Monitoring
+A sophisticated, real-time spatial intelligence platform for NTU, designed to monitor canteen crowd density while safeguarding student privacy.
 
-A sophisticated web application exploring the intersection of architecture, human behavior, and academic spaces through real-time canteen crowd monitoring.
+## 🌟 Overview
 
-### Features
+CROWDBYTE synthesizes privacy-preserving engineering with real-time campus dynamics. It transforms crowdsourced observations into a shared campus resource, using edge-based redaction and anonymized aggregation to ensure individual identity is never compromised.
 
-- **Elegant Design**: High-end, gallery-like interface with sophisticated typography and curated visual elements
-- **Real-time Monitoring**: Live crowd level updates across 8 NTU canteens
-- **Interactive Map**: Visual campus layout with dynamic crowd indicators
-- **AI Simulation**: Mock AI image analysis for crowd density detection
-- **Analytics Dashboard**: Administrative insights into usage patterns
-- **Responsive**: Optimized for all device sizes
+## ✨ Key Features
 
-### Technology Stack
+- **Privacy-First Architecture**: 
+  - **Edge-Based Redaction**: Student-uploaded photos are blurred/masked on the client-side before submission.
+  - **Privacy Metadata**: Compliant with USENIX 2020 protocols for anonymized movement data.
+  - **Live Feed Anonymization**: Real-time previews in the dashboard are blurred to preserve privacy while showing volume trends.
+- **Intelligent Canteen Directory**:
+  - **Staleness Logic**: Data automatically "decays" and is marked as outdated if no report is received within 120 minutes.
+  - **"Request Pulse"**: Interactive prompts for users to update status when data becomes stale.
+- **Interactive Campus Collision Map**:
+  - Dynamic visual layout of NTU canteens with color-coded crowd indicators.
+  - Neutral "Outdated" state for canteens with expired data.
+- **Sophisticated Reporting System**:
+  - **AI-Assisted Classification**: Simulated AI analysis suggests crowd levels based on uploaded imagery.
+  - **Client-Side Compression**: High-resolution images are automatically resized and optimized to stay within database limits.
+- **Real-Time Analytics**:
+  - Live tracking of report volume and participation.
+  - Dynamic "Most Active Canteen" detection based on "High" crowd frequency.
 
-- **Frontend**: Vanilla HTML/CSS/JavaScript with Vite
-- **Styling**: Custom CSS with Google Fonts (Playfair Display, Crimson Text, Inter, Space Mono)
-- **Data Storage**: Browser localStorage
-- **Build Tool**: Vite
+## 🛠️ Technology Stack
 
-### Project Structure
+### Frontend
+- **Framework**: Next.js 16 (App Router)
+- **Styling**: Tailwind CSS (Minimalist, Editorial Aesthetic)
+- **Animations**: Framer Motion
+- **State Management**: React Hooks + Firebase Real-time Listeners
+
+### Backend
+- **Framework**: FastAPI (Python)
+- **Database**: Google Cloud Firestore (Firebase)
+- **Security**: In-memory Rate Limiting (3 reports per 5 minutes per user)
+- **Validation**: Pydantic models for strict data integrity
+
+## 📂 Project Structure
 
 ```
 SC4052-Project/
-├── frontend/           # Main application
-│   ├── index.html
-│   ├── style.css
-│   ├── script.js
-│   ├── package.json
-│   └── package-lock.json
-├── backend/            # FastAPI server (future)
-│   ├── main.py
-│   └── requirements.txt
-├── .gitignore
+├── frontend/               # Next.js Application
+│   ├── app/                # App Router (Pages, Layouts, CSS)
+│   ├── lib/                # Constants, Firebase Client, Utils
+│   └── public/             # Static Assets
+├── backend/                # FastAPI Application
+│   ├── api/                # Route definitions
+│   ├── logic/              # Rate limiting, Crowd calculations
+│   ├── routes/             # Endpoint implementations
+│   ├── database.py         # Firebase initialization
+│   ├── main.py             # Entry point
+│   ├── models.py           # Pydantic Schemas
+│   └── requirements.txt    # Python dependencies
 └── README.md
 ```
 
-### Running the Application
+## 🚀 Getting Started
 
-#### Frontend (Required)
+### Prerequisites
+- Node.js (v18+)
+- Python 3.10+
+- Firebase Project with Firestore enabled
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+### 1. Backend Setup
+1. Place your `firebase-key.json` in the `backend/` directory.
+2. Configure environment:
+   ```bash
+   cd backend
+   python -m venv .venv
+   source .venv/Scripts/activate # Windows: .venv\Scripts\activate
+   pip install -r requirements.txt
+   ```
+3. Initialize the database:
+   ```bash
+   python setup_collections.py
+   python update_canteens.py
+   ```
+4. Start the API:
+   ```bash
+   python main.py
+   ```
+   API available at `http://localhost:8000`.
 
-Open `http://localhost:5173` (or the port shown in terminal).
+### 2. Frontend Setup
+1. Configure `.env.local` with your Firebase credentials.
+2. Install and run:
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+   Open `http://localhost:3000`.
 
-#### Backend (Optional - Future API integration)
+## 📜 Privacy Protocol
 
-```bash
-cd backend
-python -m venv .venv
-source .venv/Scripts/activate    # Windows
-# or: source .venv/bin/activate   # macOS/Linux
-pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-```
+CROWDBYTE operates under a strict privacy manifesto:
+1. **Redaction**: All facial data is masked at the edge.
+2. **Ephemerality**: Raw imagery is purged immediately after processing.
+3. **Anonymization**: Crowd levels are decoupled from individual identities.
+4. **Differential Privacy**: Statistical noise is used to prevent pattern-matching of student schedules.
 
-API available at `http://localhost:8000`.
-
-### Design Philosophy
-
-This application explores how physical environments shape human behavior in academic settings. The sophisticated design reflects the thoughtful curation of space and time in educational institutions.
-
-### Navigation
-
-- **Home**: Landing page with curated content sections
-- **Dashboard**: Real-time canteen monitoring with interactive map
-- **Submit Report**: Crowd level reporting with AI simulation
-- **Admin**: Analytics and usage insights
-
-### Development Notes
-
-- All functionality preserved from original prototype
-- localStorage maintains report data between sessions
-- No external dependencies beyond development tools
-- Fully responsive design with mobile optimization
-
-
-## NTU Crowd Monitoring MVP
-
-A simple crowdsourced canteen crowd monitoring web app.
-
-### Run locally
-
-1. Open `index.html` in a browser (or serve folder with a local static server).
-2. Use the top navigation to go to Dashboard and Submit Report.
-
-### Features
-
-- Landing/Cover page matching screenshot style
-- Dashboard with 8 canteens and color-coded crowd levels
-- Report form stores data in browser `localStorage`
-- Image upload auto-suggests level via simulated AI rule
-- Dashboard refreshes after report submission and periodically
+---
+© 2026 CROWDBYTE • Designed with technical rigour and ethical intention for Nanyang Technological University.
