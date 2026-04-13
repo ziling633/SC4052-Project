@@ -89,7 +89,9 @@ const CANTEEN_VISUALS = {
 
 const getCanteenVisual = (name) => CANTEEN_VISUALS[name] || { image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1000&q=80', blur: 8 };
 
-const getMarkerColor = (crowdLevel) => {
+const getMarkerColor = (crowdLevel, isStale = false) => {
+  if (isStale) return { bg: 'bg-slate-300', border: 'border-slate-400', text: 'text-slate-700', glow: 'bg-slate-300/40' };
+  
   const normalized = String(crowdLevel || '').toLowerCase();
   if (normalized === 'low') return { bg: 'bg-emerald-400', border: 'border-emerald-500', text: 'text-emerald-900', glow: 'bg-emerald-300/40' };
   if (normalized === 'medium') return { bg: 'bg-amber-400', border: 'border-amber-500', text: 'text-amber-900', glow: 'bg-amber-300/40' };
@@ -192,6 +194,15 @@ function getDisplayLabel(value) {
 function getDisplayRelative(value) {
   if (!value) return 'No timestamp available';
   return formatRelativeTime(value);
+}
+
+function isDataStale(isoString) {
+  if (!isoString) return true;
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) return true;
+  
+  const diffInMinutes = (Date.now() - date.getTime()) / (1000 * 60);
+  return diffInMinutes > 120; // 120 minutes = 2 hours
 }
 
 function getCanteenId(name) {
@@ -414,12 +425,14 @@ export default function Home() {
     () =>
       directoryItems.map((item) => {
         const reportData = latestReportsByCanteen[item.id];
+        const lastUpdated = reportData?.lastUpdated || null;
         return {
           ...item,
           crowdLevel: reportData?.crowdLevel || 'Unknown',
-          lastUpdated: reportData?.lastUpdated || null,
+          lastUpdated: lastUpdated,
           imagePreview: reportData?.imagePreview || null,
           source: reportData?.source || 'Firestore',
+          isStale: isDataStale(lastUpdated),
         };
       }),
     [directoryItems, latestReportsByCanteen]
@@ -855,7 +868,9 @@ export default function Home() {
                             key={item.id}
                             type="button"
                             onClick={() => openCanteenModal(item)}
-                            className="group w-full rounded-[1.75rem] border border-[rgba(33,18,8,0.06)] bg-[var(--bg-soft)] px-5 py-4 text-left transition hover:shadow-lg"
+                            className={`group w-full rounded-[1.75rem] border border-[rgba(33,18,8,0.06)] px-5 py-4 text-left transition hover:shadow-lg ${
+                              item.isStale ? 'bg-slate-50 opacity-70' : 'bg-[var(--bg-soft)]'
+                            }`}
                           >
                             <div className="flex items-center justify-between gap-4">
                               <div>
@@ -864,7 +879,23 @@ export default function Home() {
                                   {item.lastUpdated ? `Updated ${getDisplayLabel(item.lastUpdated)}` : 'No timestamp available'}
                                 </p>
                               </div>
-                              <span className={`inline-flex rounded-full px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.18em] ${statusStyles}`}>{item.crowdLevel || 'UNKNOWN'}</span>
+                              {item.isStale ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    alert(`Redirects to Submit Report for ${item.name}`);
+                                    window.location.hash = 'report';
+                                  }}
+                                  className="rounded-full border border-black/20 bg-transparent px-4 py-2 text-[10px] font-semibold uppercase tracking-widest text-[var(--text)] transition hover:bg-black hover:text-white"
+                                >
+                                  Update Status
+                                </button>
+                              ) : (
+                                <span className={`inline-flex rounded-full px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.18em] ${statusStyles}`}>
+                                  {item.crowdLevel || 'UNKNOWN'}
+                                </span>
+                              )}
                             </div>
                             <div className="mt-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Tap for detail</div>
                           </button>
@@ -936,11 +967,12 @@ export default function Home() {
                       {MAP_COORDINATES.map((marker, idx) => {
                         const canteenData = mergedDirectoryItems.find((item) => item.name === marker.id);
                         const crowdLevel = canteenData?.crowdLevel || 'Unknown';
-                        const colors = getMarkerColor(crowdLevel);
+                        const isStale = canteenData?.isStale || false;
+                        const colors = getMarkerColor(crowdLevel, isStale);
                         return (
                           <div key={marker.label} className="absolute flex items-center justify-center" style={{ top: marker.top, left: marker.left, width: '3rem', height: '3rem', transform: 'translate(-50%, -50%)' }}>
                             <span className={`absolute inset-0 rounded-full ${colors.glow} blur-2xl`} />
-                            <span className={`absolute inset-0 rounded-full ${colors.bg} pulse-marker`} />
+                            {!isStale && <span className={`absolute inset-0 rounded-full ${colors.bg} pulse-marker`} />}
                             <span className={`relative inline-flex h-10 w-10 items-center justify-center rounded-full border-2 ${colors.border} ${colors.bg} ${colors.text} shadow-[0_8px_20px_rgba(33,18,8,0.2)] text-[0.65rem] font-bold`}>{marker.label}</span>
                           </div>
                         );
@@ -958,6 +990,10 @@ export default function Home() {
                       <div className="flex items-center gap-3">
                         <span className="inline-flex h-3.5 w-3.5 rounded-full bg-rose-500"></span>
                         <span>High crowd (Live)</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="inline-flex h-3.5 w-3.5 rounded-full bg-slate-300"></span>
+                        <span>Outdated (Update Required)</span>
                       </div>
                       <p className="mt-2 text-xs italic text-[var(--muted)]">Markers update in real-time from Firestore</p>
                     </div>

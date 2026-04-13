@@ -28,7 +28,7 @@ def populate_sample_reports(total_records=120):
         
         # Random data for testing
         c_id = random.choice(canteen_ids)
-        c_name = f"Canteen {c_id} Test" # Optional, matches your screenshot
+        c_name = f"Canteen {c_id} Test"
         level = random.choice(levels)
         
         # Randomize timestamps within the last 30 minutes for aggregation testing
