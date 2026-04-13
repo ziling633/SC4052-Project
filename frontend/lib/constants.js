@@ -1,8 +1,8 @@
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000/api/v1';
 
 export const CANTEEN_NAMES = [
-    'Canteen 1', 'Canteen 2', 'Canteen 4', 'Canteen 9', 'Canteen 11',
-    'Canteen 14', 'Canteen 16', 'North Hill Food Court', 'Crescent Food Court',
+    'Canteen 1', 'Canteen 2', 'Canteen 4', 'Canteen 9', 'Canteen 11 (Hall 11)',
+    'Canteen 14 (Hall 14)', 'Canteen 16 (Hall 16)', 'North Hill Food Court', 'Crescent Food Court',
     'Northspine food court (Canteen A)', 'Southspine food court (Canteen B)',
     'Quad Cafe', 'Pioneer Food Court', 'Nanyang Crescent Food Court'
 ];

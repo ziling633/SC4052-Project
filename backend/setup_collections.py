@@ -33,10 +33,10 @@ def setup_canteens(db):
     canteens_data = [
         {"name": "North Spine Food Court", "location": "North", "lat": 1.3456, "lng": 103.6789},
         {"name": "The Deck Food Court", "location": "Central", "lat": 1.3467, "lng": 103.6800},
-        {"name": "Canteen 11", "location": "Central", "lat": 1.3475, "lng": 103.6810},
+        {"name": "Canteen 11 (Hall 11)", "location": "Central", "lat": 1.3475, "lng": 103.6810},
         {"name": "Canteen 13", "location": "North", "lat": 1.3440, "lng": 103.6775},
         {"name": "Food Paradise (North Hill)", "location": "North", "lat": 1.3420, "lng": 103.6760},
-        {"name": "Canteen 16", "location": "South", "lat": 1.3500, "lng": 103.6850},
+        {"name": "Canteen 16 (Hall 16)", "location": "South", "lat": 1.3500, "lng": 103.6850},
         {"name": "Canteen 18", "location": "East", "lat": 1.3480, "lng": 103.6900},
         {"name": "Canteen 9", "location": "West", "lat": 1.3490, "lng": 103.6700},
     ]

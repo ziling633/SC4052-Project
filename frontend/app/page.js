@@ -7,15 +7,27 @@ import { firestore } from '../lib/firebaseClient';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000/api/v1';
 
+const CANTEEN_NAME_ALIASES = {
+  'Canteen 11': 'Canteen 11 (Hall 11)',
+  'Canteen 14': 'Canteen 14 (Hall 14)',
+  'Canteen 16': 'Canteen 16 (Hall 16)',
+};
+
+function normalizeCanteenName(name) {
+  const value = String(name || '').trim();
+  if (!value) return value;
+  return CANTEEN_NAME_ALIASES[value] || value;
+}
+
 const CANTEEN_NAMES = [
   'Canteen 1 (Hall 1)',
   'Canteen 2 (Hall 2)',
   'Canteen 4 (Hall 4)',
   'Canteen 5 (Hall 5)',
   'Canteen 9 (Hall 9)',
-  'Canteen 11',
-  'Canteen 14',
-  'Canteen 16',
+  'Canteen 11 (Hall 11)',
+  'Canteen 14 (Hall 14)',
+  'Canteen 16 (Hall 16)',
   'North Hill Food Court',
   'Crescent Food Court',
   'Northspine food court (Canteen A)',
@@ -30,9 +42,9 @@ const CANTEEN_ID_MAP = {
   'Canteen 4 (Hall 4)': '3',
   'Canteen 5 (Hall 5)': '13',
   'Canteen 9 (Hall 9)': '4',
-  'Canteen 11': '5',
-  'Canteen 14': '6',
-  'Canteen 16': '7',
+  'Canteen 11 (Hall 11)': '5',
+  'Canteen 14 (Hall 14)': '6',
+  'Canteen 16 (Hall 16)': '7',
   'North Hill Food Court': '8',
   'Crescent Food Court': '9',
   'Northspine food court (Canteen A)': '10',
@@ -53,9 +65,9 @@ const MAP_COORDINATES = [
   { id: 'Canteen 4 (Hall 4)', label: 'C4', lat: 1.3440, lng: 103.6860, top: '85%', left: '50%' },
   { id: 'Canteen 5 (Hall 5)', label: 'C5', lat: 1.3475, lng: 103.6784, top: '80%', left: '65%' },
   { id: 'Canteen 9 (Hall 9)', label: 'C9', lat: 1.3521, lng: 103.6849, top: '25%', left: '65%' },
-  { id: 'Canteen 11', label: 'C11', lat: 1.355034, lng: 103.685917, top: '7%', left: '65%' },
-  { id: 'Canteen 14', label: 'C14', lat: 1.352906, lng: 103.682304, top: '11%', left: '35%' },
-  { id: 'Canteen 16', label: 'C16', lat: 1.349720, lng: 103.681284, top: '20%', left: '25%' },
+  { id: 'Canteen 11 (Hall 11)', label: 'C11', lat: 1.355034, lng: 103.685917, top: '7%', left: '65%' },
+  { id: 'Canteen 14 (Hall 14)', label: 'C14', lat: 1.352906, lng: 103.682304, top: '11%', left: '35%' },
+  { id: 'Canteen 16 (Hall 16)', label: 'C16', lat: 1.349720, lng: 103.681284, top: '20%', left: '25%' },
 ];
 
 const CANTEEN_VISUALS = {
@@ -70,9 +82,9 @@ const CANTEEN_VISUALS = {
   'Canteen 4 (Hall 4)': { image: 'https://images.unsplash.com/photo-1555992336-03a23c52cdd2?auto=format&fit=crop&w=1000&q=80', blur: 14 },
   'Canteen 5 (Hall 5)': { image: 'https://images.unsplash.com/photo-1555992336-03a23c52cdd2?auto=format&fit=crop&w=1000&q=80', blur: 14 },
   'Canteen 9 (Hall 9)': { image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1000&q=80', blur: 7 },
-  'Canteen 11': { image: 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&w=1000&q=80', blur: 11 },
-  'Canteen 14': { image: 'https://images.unsplash.com/photo-1529042410759-befb1204b468?auto=format&fit=crop&w=1000&q=80', blur: 13 },
-  'Canteen 16': { image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1000&q=80', blur: 10 },
+  'Canteen 11 (Hall 11)': { image: 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&w=1000&q=80', blur: 11 },
+  'Canteen 14 (Hall 14)': { image: 'https://images.unsplash.com/photo-1529042410759-befb1204b468?auto=format&fit=crop&w=1000&q=80', blur: 13 },
+  'Canteen 16 (Hall 16)': { image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1000&q=80', blur: 10 },
 };
 
 const getCanteenVisual = (name) => CANTEEN_VISUALS[name] || { image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1000&q=80', blur: 8 };
@@ -101,6 +113,14 @@ function normalizeLevel(value) {
   return 'Unknown';
 }
 
+function pickBestCrowdLevel(...values) {
+  for (const value of values) {
+    const normalized = normalizeLevel(value);
+    if (normalized !== 'Unknown') return normalized;
+  }
+  return 'Unknown';
+}
+
 function simulateAIClassification(file) {
   if (!file) return 'Unknown';
   const mod = file.size % 3;
@@ -109,13 +129,39 @@ function simulateAIClassification(file) {
   return 'High';
 }
 
-function createImagePreview(file) {
+function compressImage(file, maxWidth = 800, quality = 0.7) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = (maxWidth / width) * height;
+          width = maxWidth;
+        }
+
+        canvas.width = width;a
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Output as jpeg with specified quality
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = event.target.result;
+    };
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+function createImagePreview(file) {
+  return compressImage(file, 800, 0.7);
 }
 
 function formatRelativeTime(isoString) {
@@ -159,6 +205,7 @@ export default function Home() {
   const [directoryItems, setDirectoryItems] = useState([]);
   const [directoryLoading, setDirectoryLoading] = useState(true);
   const [reportSummary, setReportSummary] = useState({ totalReports: 0, topCanteen: 'None' });
+  const [latestReportsByCanteen, setLatestReportsByCanteen] = useState({});
   const [privacyFilterEnabled, setPrivacyFilterEnabled] = useState(true); // Default to On
   const [activeCanteen, setActiveCanteen] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -215,11 +262,13 @@ export default function Home() {
       console.log('📊 API last_updated values:', (json.data || []).map((item) => ({ canteen_id: item.canteen_id, last_updated: item.last_updated })));
       setStatusList(json.data || []);
     } catch (error) {
-      console.error(error);
-      setStatusList([]);
-      setStatusError(error.name === 'AbortError'
-        ? 'Dashboard request timed out. Is the backend running on http://localhost:8000?'
-        : 'Unable to load dashboard data. Ensure the backend is running on port 8000 and open the frontend at http://localhost:3000.');
+      if (error.name === 'AbortError') {
+        console.warn('Dashboard fetch aborted');
+      } else {
+        console.error(error);
+        setStatusList([]);
+        setStatusError('Unable to load dashboard data. Ensure the backend is running on port 8000 and open the frontend at http://localhost:3000.');
+      }
     } finally {
       window.clearTimeout(timeoutId);
       setLoadingStatus(false);
@@ -247,7 +296,7 @@ export default function Home() {
           const data = doc.data();
           return {
             id: doc.id,
-            name: data.name || `Canteen ${doc.id}`,
+            name: normalizeCanteenName(data.name || `Canteen ${doc.id}`),
             crowdLevel: data.currentCrowdLevel || data.crowdLevel || data.crowd_level || 'Unknown',
             lastUpdated: data.lastUpdated ? data.lastUpdated.toDate().toISOString() : null,
           };
@@ -275,12 +324,21 @@ export default function Home() {
       reportsQuery,
       (snapshot) => {
         const counts = {};
+        const highCrowdCounts = {};
+        const latestByCanteen = {};
         let latestImage = null;
 
         snapshot.docs.forEach((doc, index) => {
           const data = doc.data();
-          const canteenName = data.canteen_name || 'Unknown';
+          const canteenName = normalizeCanteenName(data.canteen_name || data.canteenName || 'Unknown');
           counts[canteenName] = (counts[canteenName] || 0) + 1;
+
+          const rawLevel = data.crowd_level || data.crowdLevel || data.currentCrowdLevel || 'Unknown';
+          const crowdLevel = normalizeLevel(rawLevel);
+
+          if (crowdLevel === 'High') {
+            highCrowdCounts[canteenName] = (highCrowdCounts[canteenName] || 0) + 1;
+          }
 
           if (!latestImage && data.image_preview) {
             latestImage = {
@@ -288,21 +346,53 @@ export default function Home() {
               canteenName,
             };
           }
+
+          const canteenId = data.canteen_id;
+          if (canteenId && !latestByCanteen[canteenId]) {
+            const ts = data.timestamp;
+            const lastUpdated =
+              ts && typeof ts.toDate === 'function'
+                ? ts.toDate().toISOString()
+                : typeof ts === 'string'
+                  ? ts
+                  : ts instanceof Date
+                    ? ts.toISOString()
+                    : null;
+
+            latestByCanteen[canteenId] = { 
+              crowdLevel, 
+              lastUpdated,
+              imagePreview: data.image_preview || null,
+              source: data.source || 'manual'
+            };
+          }
         });
 
         const totalReports = snapshot.size;
         let topCanteen = 'None';
-        let topCount = 0;
+        let maxHighReports = 0;
 
-        Object.entries(counts).forEach(([name, count]) => {
-          if (count > topCount) {
-            topCount = count;
+        Object.entries(highCrowdCounts).forEach(([name, count]) => {
+          if (count > maxHighReports) {
+            maxHighReports = count;
             topCanteen = `${name} (${count})`;
           }
         });
 
+        // Fallback to most reports overall if no High crowd reports exist
+        if (topCanteen === 'None' && snapshot.size > 0) {
+          let topOverallCount = 0;
+          Object.entries(counts).forEach(([name, count]) => {
+            if (count > topOverallCount) {
+              topOverallCount = count;
+              topCanteen = `${name} (${count})`;
+            }
+          });
+        }
+
         setReportSummary({ totalReports, topCanteen });
         setLatestUpload(latestImage);
+        setLatestReportsByCanteen(latestByCanteen);
       },
       (error) => {
         console.error('Firestore reports listener error:', error);
@@ -316,21 +406,23 @@ export default function Home() {
   const topCanteen = reportSummary.topCanteen;
 
   const statusByName = useMemo(
-    () => Object.fromEntries(statusList.map((item) => [item.name, item])),
+    () => Object.fromEntries(statusList.map((item) => [normalizeCanteenName(item.name), item])),
     [statusList]
   );
 
   const mergedDirectoryItems = useMemo(
     () =>
       directoryItems.map((item) => {
-        const status = statusByName[item.name];
+        const reportData = latestReportsByCanteen[item.id];
         return {
           ...item,
-          crowdLevel: status?.current_status || item.crowdLevel,
-          lastUpdated: status?.last_updated || item.lastUpdated,
+          crowdLevel: reportData?.crowdLevel || 'Unknown',
+          lastUpdated: reportData?.lastUpdated || null,
+          imagePreview: reportData?.imagePreview || null,
+          source: reportData?.source || 'Firestore',
         };
       }),
-    [directoryItems, statusByName]
+    [directoryItems, latestReportsByCanteen]
   );
 
   const handleFileChange = async (event) => {
@@ -403,7 +495,7 @@ export default function Home() {
       setSubmitStatus('submitting');
 
       const abortController = new AbortController();
-      const timeoutId = window.setTimeout(() => abortController.abort(), 10000);
+      const timeoutId = window.setTimeout(() => abortController.abort(), 20000);
 
       try {
         const response = await fetch(`${API_BASE}/report`, {
@@ -446,10 +538,12 @@ export default function Home() {
           setSubmitStatus('idle');
         }, 3200);
       } catch (error) {
+        if (error.name === 'AbortError') {
+          console.warn('Report submission aborted');
+          return;
+        }
         console.error(error);
-        const errorMessage = error.name === 'AbortError'
-          ? 'Request timed out. Please try again.'
-          : error.message || 'Unable to submit report right now.';
+        const errorMessage = error.message || 'Unable to submit report right now.';
         setFormFeedback(errorMessage);
         setSubmitStatus('error');
         setToastMessage('Report failed to submit. Please try again.');
@@ -525,7 +619,7 @@ export default function Home() {
             <a href="#landing" className="transition hover:text-[var(--text)]">Home</a>
             <a href="#dashboard" className="transition hover:text-[var(--text)]">Dashboard</a>
             <a href="#report" className="transition hover:text-[var(--text)]">Submit Report</a>
-            <a href="#admin" className="transition hover:text-[var(--text)]">Admin</a>
+            <a href="#admin" className="transition hover:text-[var(--text)]">Analytics</a>
           </nav>
         </div>
       </header>
@@ -602,46 +696,69 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="bg-[var(--bg-soft)] py-24">
-          <div className="mx-auto max-w-7xl px-6">
-            <div className="mb-14 flex flex-col gap-4">
-              <div className="text-sm uppercase tracking-[0.28em] text-[var(--muted)] font-semibold">Curated Spaces</div>
-              <p className="max-w-2xl text-3xl font-semibold tracking-[-0.03em] text-[var(--text)] sm:text-4xl">
-                A tactile edit of campus life and communal study.
+        {/* 1. Change max-w-[92rem] to max-w-7xl (standard professional width) */}
+        <section className="bg-[var(--bg-soft)] py-16 lg:py-24">
+          <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+            
+            <div className="mb-12 flex flex-col gap-4">
+              <div className="text-sm uppercase tracking-[0.28em] text-[var(--muted)] font-semibold">
+                Spatial Intelligence
+              </div>
+              <p className="max-w-2xl text-3xl font-semibold tracking-[-0.03em] text-[var(--text)] sm:text-4xl leading-tight">
+                A real-time overview of campus density and student flow.
               </p>
             </div>
-            <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr] xl:grid-cols-[1.4fr_0.55fr_0.55fr]">
-              <div className="grid gap-6 rounded-[2rem] bg-white p-8 shadow-[0_30px_60px_rgba(33,18,8,0.06)]">
+
+            {/* 2. Reduced the column ratio and removed the massive 44rem height */}
+            <div className="grid gap-8 lg:grid-cols-[1.4fr_1fr] lg:items-stretch">
+              
+              {/* 3. Changed min-h to a more reasonable 36rem for better vertical alignment */}
+              <div className="flex h-full flex-col gap-6 rounded-[2.5rem] bg-white p-8 shadow-[0_30px_60px_rgba(33,18,8,0.06)] lg:min-h-[38rem]">
                 <div className="overflow-hidden rounded-[1.75rem] border border-[rgba(33,18,8,0.08)]">
-                  <img className="h-96 w-full object-cover" src="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=900&q=80" alt="Organic flow" />
+                  {/* Proportional image height */}
+                  <img className="h-[20rem] w-full object-cover sm:h-[24rem]" src="..." alt="Anonymized analytics" />
                 </div>
-                <div className="mt-6 space-y-3">
-                  <div className="text-xs uppercase tracking-[0.34em] text-[var(--muted)] font-semibold">Organic Flow</div>
-                  <p className="text-base leading-8 text-[var(--muted)]">
-                    Where architectural precision meets the fluid nature of human movement. A study in expressive forms and tactile surfaces.
+                <div className="space-y-4 mt-2">
+                  <div className="text-xs uppercase tracking-[0.34em] text-[var(--muted)] font-semibold">Anonymized Analytics</div>
+                  <p className="text-base leading-relaxed text-[var(--muted)]">
+                    Where precision analytics meets student privacy. A study in anonymized movement and spatial utility across NTU.
                   </p>
                 </div>
               </div>
 
-              <div className="grid gap-6">
-                <div className="rounded-[2rem] bg-[var(--primary)] p-8 shadow-[0_30px_60px_rgba(33,18,8,0.08)] text-white">
-                  <div className="text-sm uppercase tracking-[0.28em] text-[var(--bg-soft)] font-semibold mb-3">Silence is a texture we curate.</div>
-                  <p className="text-base leading-8">
-                    A quiet manifesto for the rhythms that shape our shared spaces.
-                  </p>
-                  <button className="mt-8 inline-flex items-center rounded-full border border-white/20 bg-white/10 px-6 py-3 text-sm font-semibold uppercase tracking-[0.22em] transition hover:bg-white hover:text-[var(--primary)]">
-                    Read manifesto
+              {/* 4. Right side column - adjusted to match the 38rem height */}
+              <div className="flex h-full flex-col gap-6 lg:min-h-[38rem]">
+                <div className="flex flex-1 flex-col justify-between rounded-[2.5rem] bg-[var(--primary)] p-8 shadow-[0_30px_60px_rgba(33,18,8,0.08)] text-white">
+                  <div className="space-y-4">
+                    <div className="text-sm uppercase tracking-[0.28em] text-white/70 font-semibold">Privacy is a feature we architect.</div>
+                    <p className="text-lg leading-relaxed font-medium">
+                      An anonymised manifest for the rhythms that shape our canteen.
+                    </p>
+                  </div>
+                  <button className="mt-8 inline-flex w-full items-center justify-center rounded-full border border-white/20 bg-white/10 px-8 py-4 text-xs font-bold uppercase tracking-[0.22em] transition hover:bg-white hover:text-[var(--primary)] sm:w-fit">
+                    View privacy protocol
                   </button>
                 </div>
-                <div className="grid gap-6 sm:grid-cols-2">
-                  <div className="rounded-[1.75rem] border border-[rgba(33,18,8,0.08)] bg-white p-6 shadow-[0_20px_40px_rgba(33,18,8,0.04)]">
-                    <img className="mb-5 h-40 w-full rounded-[1.4rem] object-cover" src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=700&q=80" alt="Group study" />
-                    <div className="text-sm uppercase tracking-[0.25em] text-[var(--muted)] font-semibold">Collective Study</div>
-                    <p className="mt-3 text-sm leading-7 text-[var(--muted)]">Group dynamics in academic spaces.</p>
+
+                {/* Small cards section */}
+                <div className="grid flex-1 gap-6 sm:grid-cols-2 lg:grid-cols-1">
+                  <div className="flex flex-col rounded-[1.75rem] border border-[rgba(33,18,8,0.08)] bg-white p-6 shadow-[0_20px_40px_rgba(33,18,8,0.04)]">
+                    <img
+                      className="mb-5 h-44 w-full rounded-[1.4rem] object-cover"
+                      src="https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=900&q=80"
+                      alt="Campus pulse"
+                    />
+                    <div className="text-sm uppercase tracking-[0.25em] text-[var(--muted)] font-semibold">Campus Pulse</div>
+                    <p className="mt-3 text-sm leading-7 text-[var(--muted)]">Monitoring group dynamics across NTU&apos;s social and academic landscapes.</p>
                   </div>
-                  <div className="rounded-[1.75rem] border border-[rgba(33,18,8,0.08)] bg-white p-6 shadow-[0_20px_40px_rgba(33,18,8,0.04)]">
-                    <div className="text-sm uppercase tracking-[0.25em] text-[var(--muted)] font-semibold">The Archive</div>
-                    <p className="mt-4 text-sm leading-7 text-[var(--muted)]">Historical patterns of campus utilization.</p>
+                  <div className="flex flex-col rounded-[1.75rem] border border-[rgba(33,18,8,0.08)] bg-white p-6 shadow-[0_20px_40px_rgba(33,18,8,0.04)]">
+                    <img
+                      className="mb-5 h-44 w-full rounded-[1.4rem] object-cover"
+                      src="https://images.unsplash.com/photo-1526498460520-4c246339dccb?auto=format&fit=crop&w=900&q=80"
+                      alt="Historical insights"
+                    />
+                    <div className="text-sm uppercase tracking-[0.25em] text-[var(--muted)] font-semibold">Historical Insights</div>
+                    <p className="mt-3 text-sm leading-7 text-[var(--muted)]">Identifying long-term patterns of canteen utilisation.</p>
                   </div>
                 </div>
               </div>
@@ -653,28 +770,28 @@ export default function Home() {
           <div className="mx-auto max-w-7xl px-6">
             <div className="grid gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
               <div className="space-y-8">
-                <div className="text-sm uppercase tracking-[0.28em] text-[var(--muted)] font-semibold">The Tactile Experience</div>
+                <div className="text-sm uppercase tracking-[0.28em] text-[var(--muted)] font-semibold">THE ANALYTICS EXPERIENCE</div>
                 <div className="space-y-6">
                   <div className="space-y-3">
-                    <h2 className="text-4xl font-semibold tracking-[-0.03em] text-[var(--text)] sm:text-5xl">A study of texture, light, and rhythm.</h2>
-                    <p className="max-w-xl text-base leading-8 text-[var(--muted)]">How environment and crowd flow combine to shape the feel of every canteen, corridor, and study room.</p>
+                    <h2 className="text-4xl font-semibold tracking-[-0.03em] text-[var(--text)] sm:text-5xl">A study of movement, privacy, and communal flow.</h2>
+                    <p className="max-w-xl text-base leading-8 text-[var(--muted)]">How real-time data and privacy engineering combine to optimize the dining experience across all NTU canteens.</p>
                   </div>
                   <div className="space-y-6">
                     {[
                       {
                         number: '01',
-                        label: 'Natural Textures',
-                        description: 'The subtle variations in crowd density that create the unique atmosphere of each canteen space.',
+                        label: 'Anonymized Vision',
+                        description: 'Every student-contributed photo undergoes an immediate privacy-redaction process to mask faces while preserving essential crowd context.',
                       },
                       {
                         number: '02',
-                        label: 'Architectural Flow',
-                        description: 'How building layouts influence movement patterns and social interactions within spaces.',
+                        label: 'Live Flow Metrics',
+                        description: 'Real-time updates on canteen utilization allow you to navigate peak-hour queues and find seating with effortless precision.',
                       },
                       {
                         number: '03',
-                        label: 'Temporal Rhythms',
-                        description: 'The ebb and flow of activity throughout the academic day, shaped by class schedules and meal times.',
+                        label: 'Collective Intelligence',
+                        description: 'A decentralized service model that transforms individual dining observations into a shared, high-value campus resource.',
                       },
                     ].map((item) => (
                       <div key={item.number} className="flex items-start gap-6 rounded-[1.5rem] border border-[rgba(33,18,8,0.06)] bg-[var(--bg-soft)] p-6">
@@ -692,23 +809,10 @@ export default function Home() {
               <div className="relative overflow-hidden rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white shadow-[0_30px_60px_rgba(33,18,8,0.06)]">
                 <img className="aspect-[4/3] w-full object-cover" src="https://images.unsplash.com/photo-1481627834876-b7833e8f5570?auto=format&fit=crop&w=900&q=80" alt="Architecture book" />
                 <div className="absolute left-6 top-6 max-w-xs rounded-[1.75rem] border border-[rgba(33,18,8,0.06)] bg-[rgba(255,255,255,0.96)] p-6 shadow-xl">
-                  <p className="text-sm italic leading-7 text-[var(--text)]">"Architecture is the learned game, correct and magnificent, of forms assembled in the light."</p>
-                  <p className="mt-6 text-sm uppercase tracking-[0.28em] text-[var(--muted)]">— Le Corbusier</p>
+                  <p className="text-sm italic leading-7 text-[var(--text)]">"The strength of a community is found in its ability to share insights while safeguarding the privacy of its members."</p>
+                  <p className="mt-6 text-sm uppercase tracking-[0.28em] text-[var(--muted)]">— THE PRIVACY MANIFESTO</p>
                 </div>
               </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="bg-[var(--bg-soft)] py-24">
-          <div className="mx-auto max-w-4xl px-6 text-center">
-            <div className="rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white p-14 shadow-[0_30px_60px_rgba(33,18,8,0.06)]">
-              <h2 className="text-4xl font-semibold tracking-[-0.03em] text-[var(--text)] sm:text-5xl">Elevate your study ritual.</h2>
-              <p className="mx-auto mt-6 max-w-2xl text-base leading-8 text-[var(--muted)]">Receive thoughtful updates on crowd patterns, spatial cues and the moments that matter in campus life.</p>
-              <form className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-                <input type="email" placeholder="Enter email address" className="min-w-[20rem] rounded-full border border-[rgba(33,18,8,0.1)] bg-[var(--bg-soft)] px-6 py-3 text-sm text-[var(--text)] focus:border-[var(--primary)] focus:outline-none" />
-                <button type="submit" className="rounded-full bg-[var(--primary)] px-8 py-3 text-sm font-semibold uppercase tracking-[0.22em] text-white transition hover:bg-[var(--accent)]">Subscribe</button>
-              </form>
             </div>
           </div>
         </section>
@@ -890,7 +994,7 @@ export default function Home() {
         <section id="admin" className="bg-[var(--bg-soft)] py-24">
           <div className="mx-auto max-w-7xl px-6">
             <div className="mb-10 space-y-3">
-              <div className="text-sm uppercase tracking-[0.28em] text-[var(--muted)] font-semibold">Admin Analytics</div>
+              <div className="text-sm uppercase tracking-[0.28em] text-[var(--muted)] font-semibold">Analytics</div>
               <h2 className="text-4xl font-semibold tracking-[-0.03em] text-[var(--text)]">Summary metrics at a glance</h2>
               <p className="max-w-2xl text-base leading-8 text-[var(--muted)]">A clear overview of report volume, active locations, and participation over time.</p>
             </div>
@@ -1004,7 +1108,7 @@ export default function Home() {
                 <div className="grid gap-4 sm:grid-cols-3">
                   <div className="rounded-[1.5rem] bg-[var(--bg-soft)] p-5">
                     <p className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">Crowd level</p>
-                    <p className="mt-3 text-2xl font-semibold text-[var(--text)]">{activeCanteen.current_status || activeCanteen.crowdLevel || 'Unknown'}</p>
+                    <p className="mt-3 text-2xl font-semibold text-[var(--text)]">{activeCanteen.crowdLevel || 'Unknown'}</p>
                   </div>
                   <div className="rounded-[1.5rem] bg-[var(--bg-soft)] p-5">
                     <p className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">Last updated</p>
@@ -1012,20 +1116,33 @@ export default function Home() {
                   </div>
                   <div className="rounded-[1.5rem] bg-[var(--bg-soft)] p-5">
                     <p className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">Report source</p>
-                    <p className="mt-3 text-2xl font-semibold text-[var(--text)]">Firestore</p>
+                    <p className="mt-3 text-2xl font-semibold text-[var(--text)] capitalize">{activeCanteen.source || 'Firestore'}</p>
                   </div>
                 </div>
                 <div className="rounded-[1.75rem] bg-[var(--bg-soft)] p-6">
                   <p className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">Privacy Metadata</p>
                   <div className="mt-3 space-y-2 text-sm leading-7 text-[var(--muted)]">
-                    <p><strong>Source:</strong> User Upload #{Math.floor(Math.random() * 1000) + 400}</p>
+                    <p><strong>Source:</strong> {activeCanteen.source === 'vision-ai' ? 'Vision AI Inference' : 'Student Report'}</p>
                     <p><strong>Faces redacted:</strong> Via edge-processing simulation</p>
                     <p><strong>Anonymity preserved:</strong> 92% (USENIX 2020 protocols)</p>
                   </div>
                 </div>
-                <div className="rounded-[1.75rem] bg-[var(--bg-soft)] p-6">
+                <div className="rounded-[1.75rem] bg-[var(--bg-soft)] p-6 overflow-hidden">
                   <p className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">Live feed</p>
-                  <p className="mt-3 text-sm leading-7 text-[var(--muted)]">This detail view is populated with the selected canteen's Firestore data and uses a distinct blurred visual to represent current crowd sensing.</p>
+                  {activeCanteen.imagePreview ? (
+                    <div className="mt-4 relative group">
+                      <img 
+                        src={activeCanteen.imagePreview} 
+                        alt={`Live feed from ${activeCanteen.name}`}
+                        className="w-full h-48 object-cover rounded-2xl filter blur-[12px] transition duration-500 group-hover:blur-[8px]"
+                      />
+                      <div className="absolute inset-0 bg-slate-950/20 backdrop-blur-[4px] flex items-center justify-center rounded-2xl">
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white">Anonymized Live Feed</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-sm leading-7 text-[var(--muted)]">This detail view is populated with the selected canteen's Firestore data and uses a distinct blurred visual to represent current crowd sensing.</p>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-3">
                   {['Focus', 'Redaction', 'Activity'].map((tag) => (
@@ -1050,7 +1167,7 @@ export default function Home() {
                   <li><a href="#landing" className="transition hover:text-[var(--primary)]">Home</a></li>
                   <li><a href="#dashboard" className="transition hover:text-[var(--primary)]">Dashboard</a></li>
                   <li><a href="#report" className="transition hover:text-[var(--primary)]">Submit Report</a></li>
-                  <li><a href="#admin" className="transition hover:text-[var(--primary)]">Admin</a></li>
+                  <li><a href="#admin" className="transition hover:text-[var(--primary)]">Analytics</a></li>
                 </ul>
               </div>
               <div>

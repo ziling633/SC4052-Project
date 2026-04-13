@@ -73,9 +73,16 @@ async def submit_report(request_payload: ReportRequest, request: Request):
         raise
     except Exception as e:
         print(f"❌ Error submitting report: {e}")
+        # Capture the error message for debugging
+        error_msg = str(e)
+        if "maximum allowed size" in error_msg.lower() or "too large" in error_msg.lower():
+            raise HTTPException(
+                status_code=413,
+                detail={"message": "The attached image is too large for our database limit (1MB). Please try a smaller file."}
+            )
         raise HTTPException(
             status_code=500,
-            detail="An internal error occurred while saving your report."
+            detail={"message": f"An internal error occurred while saving your report: {error_msg}"}
         )
 
 @router.get("/health")
