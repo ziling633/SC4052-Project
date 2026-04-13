@@ -45,7 +45,7 @@ async def get_all_canteens_status():
                 lng=cdata.get("lng"),
                 current_status=crowd["status"],
                 confidence=crowd["confidence"],
-                last_updated=crowd["last_updated"] or "Never",
+                last_updated=crowd["last_updated"],
                 report_count=crowd["report_count"]
             ))
         
@@ -82,7 +82,7 @@ async def get_canteen_details(canteen_id: str):
             lng=cdata.get("lng"),
             current_status=crowd["status"],
             confidence=crowd["confidence"],
-            last_updated=crowd["last_updated"] or "Never",
+            last_updated=crowd["last_updated"],
             report_count=crowd["report_count"]
         )
     except HTTPException:

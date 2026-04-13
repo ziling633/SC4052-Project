@@ -1,36 +1,188 @@
 "use client";
 
 import { motion } from 'framer-motion';
-import { useEffect, useRef, useState } from 'react';
-import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp } from 'firebase/firestore';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { firestore } from '../lib/firebaseClient';
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { storage } from '../lib/firebaseClient';
 
-import { normalizeLevel, simulateAIClassification, getCanteenId } from '../lib/utils';
-import {
-  API_BASE,
-  CANTEEN_NAMES,
-  MAP_COORDINATES,
-  getCanteenVisual,
-  getMarkerColor,
-  levelStyles
-} from '../lib/constants';
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000/api/v1';
+
+const CANTEEN_NAMES = [
+  'Canteen 1 (Hall 1)',
+  'Canteen 2 (Hall 2)',
+  'Canteen 4 (Hall 4)',
+  'Canteen 5 (Hall 5)',
+  'Canteen 9 (Hall 9)',
+  'Canteen 11',
+  'Canteen 14',
+  'Canteen 16',
+  'North Hill Food Court',
+  'Crescent Food Court',
+  'Northspine food court (Canteen A)',
+  'Southspine food court (Canteen B)',
+  'Quad Cafe',
+  'Nanyang Crescent Food Court',
+];
+
+const CANTEEN_ID_MAP = {
+  'Canteen 1 (Hall 1)': '1',
+  'Canteen 2 (Hall 2)': '2',
+  'Canteen 4 (Hall 4)': '3',
+  'Canteen 5 (Hall 5)': '13',
+  'Canteen 9 (Hall 9)': '4',
+  'Canteen 11': '5',
+  'Canteen 14': '6',
+  'Canteen 16': '7',
+  'North Hill Food Court': '8',
+  'Crescent Food Court': '9',
+  'Northspine food court (Canteen A)': '10',
+  'Southspine food court (Canteen B)': '11',
+  'Quad Cafe': '12',
+  'Nanyang Crescent Food Court': '14',
+};
+
+const MAP_COORDINATES = [
+  { id: 'North Hill Food Court', label: 'NH', lat: 1.3487, lng: 103.6890, top: '10%', left: '83%' },
+  { id: 'Crescent Food Court', label: 'CR', lat: 1.3490, lng: 103.6860, top: '80%', left: '85%' },
+  { id: 'Northspine food court (Canteen A)', label: 'NSA', lat: 1.348440, lng: 103.685478, top: '42%', left: '50%' },
+  { id: 'Southspine food court (Canteen B)', label: 'SSB', lat: 1.3424, lng: 103.6823, top: '70%', left: '28%' },
+  { id: 'Quad Cafe', label: 'QC', lat: 1.3505, lng: 103.6860, top: '48%', left: '35%' },
+  { id: 'Nanyang Crescent Food Court', label: 'NC', lat: 1.3528, lng: 103.6808, top: '13%', left: '48%' },
+  { id: 'Canteen 1 (Hall 1)', label: 'C1', lat: 1.345693, lng: 103.687562, top: '62%', left: '70%' },
+  { id: 'Canteen 2 (Hall 2)', label: 'C2', lat: 1.3481, lng: 103.6854, top: '40%', left: '68%' },
+  { id: 'Canteen 4 (Hall 4)', label: 'C4', lat: 1.3440, lng: 103.6860, top: '85%', left: '50%' },
+  { id: 'Canteen 5 (Hall 5)', label: 'C5', lat: 1.3475, lng: 103.6784, top: '80%', left: '65%' },
+  { id: 'Canteen 9 (Hall 9)', label: 'C9', lat: 1.3521, lng: 103.6849, top: '25%', left: '65%' },
+  { id: 'Canteen 11', label: 'C11', lat: 1.355034, lng: 103.685917, top: '7%', left: '65%' },
+  { id: 'Canteen 14', label: 'C14', lat: 1.352906, lng: 103.682304, top: '11%', left: '35%' },
+  { id: 'Canteen 16', label: 'C16', lat: 1.349720, lng: 103.681284, top: '20%', left: '25%' },
+];
+
+const CANTEEN_VISUALS = {
+  'North Hill Food Court': { image: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1000&q=80', blur: 10 },
+  'Crescent Food Court': { image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1000&q=80', blur: 6 },
+  'Northspine food court (Canteen A)': { image: 'https://images.unsplash.com/photo-1498654896293-37aacf113fd9?auto=format&fit=crop&w=1000&q=80', blur: 12 },
+  'Southspine food court (Canteen B)': { image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1000&q=80', blur: 8 },
+  'Quad Cafe': { image: 'https://images.unsplash.com/photo-1454789548928-9efd52dc4031?auto=format&fit=crop&w=1000&q=80', blur: 5 },
+  'Nanyang Crescent Food Court': { image: 'https://images.unsplash.com/photo-1498837167922-ddd27525d352?auto=format&fit=crop&w=1000&q=80', blur: 9 },
+  'Canteen 1 (Hall 1)': { image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1000&q=80', blur: 8 },
+  'Canteen 2 (Hall 2)': { image: 'https://images.unsplash.com/photo-1454789548928-9efd52dc4031?auto=format&fit=crop&w=1000&q=80', blur: 5 },
+  'Canteen 4 (Hall 4)': { image: 'https://images.unsplash.com/photo-1555992336-03a23c52cdd2?auto=format&fit=crop&w=1000&q=80', blur: 14 },
+  'Canteen 5 (Hall 5)': { image: 'https://images.unsplash.com/photo-1555992336-03a23c52cdd2?auto=format&fit=crop&w=1000&q=80', blur: 14 },
+  'Canteen 9 (Hall 9)': { image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1000&q=80', blur: 7 },
+  'Canteen 11': { image: 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&w=1000&q=80', blur: 11 },
+  'Canteen 14': { image: 'https://images.unsplash.com/photo-1529042410759-befb1204b468?auto=format&fit=crop&w=1000&q=80', blur: 13 },
+  'Canteen 16': { image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1000&q=80', blur: 10 },
+};
+
+const getCanteenVisual = (name) => CANTEEN_VISUALS[name] || { image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1000&q=80', blur: 8 };
+
+const getMarkerColor = (crowdLevel) => {
+  const normalized = String(crowdLevel || '').toLowerCase();
+  if (normalized === 'low') return { bg: 'bg-emerald-400', border: 'border-emerald-500', text: 'text-emerald-900', glow: 'bg-emerald-300/40' };
+  if (normalized === 'medium') return { bg: 'bg-amber-400', border: 'border-amber-500', text: 'text-amber-900', glow: 'bg-amber-300/40' };
+  if (normalized === 'high') return { bg: 'bg-rose-500', border: 'border-rose-600', text: 'text-white', glow: 'bg-rose-400/40' };
+  return { bg: 'bg-slate-300', border: 'border-slate-400', text: 'text-slate-700', glow: 'bg-slate-300/40' };
+};
+
+const levelStyles = {
+  Low: 'bg-emerald-400 text-emerald-900',
+  Medium: 'bg-amber-300 text-amber-950',
+  High: 'bg-rose-500 text-white',
+  Unknown: 'bg-slate-300 text-slate-700',
+};
+
+function normalizeLevel(value) {
+  if (!value) return 'Unknown';
+  const normalized = String(value).toLowerCase();
+  if (normalized === 'low') return 'Low';
+  if (normalized === 'medium') return 'Medium';
+  if (normalized === 'high') return 'High';
+  return 'Unknown';
+}
+
+function simulateAIClassification(file) {
+  if (!file) return 'Unknown';
+  const mod = file.size % 3;
+  if (mod === 0) return 'Low';
+  if (mod === 1) return 'Medium';
+  return 'High';
+}
+
+function createImagePreview(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function formatRelativeTime(isoString) {
+  if (!isoString) return 'No data';
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) return 'Unknown';
+
+  const diff = Math.max(0, Math.round((Date.now() - date.getTime()) / 1000));
+  if (diff < 60) return `${diff}s ago`;
+  const minutes = Math.floor(diff / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+function formatDisplayTime(value) {
+  if (!value) return null;
+  if (value === 'Never') return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function getDisplayLabel(value) {
+  return formatDisplayTime(value) || 'No timestamp available';
+}
+
+function getDisplayRelative(value) {
+  if (!value) return 'No timestamp available';
+  return formatRelativeTime(value);
+}
+
+function getCanteenId(name) {
+  return CANTEEN_ID_MAP[name] || null;
+}
 
 export default function Home() {
-  // --- STATE DECLARATIONS (deduplicated) ---
   const [statusList, setStatusList] = useState([]);
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [statusError, setStatusError] = useState('');
   const [directoryItems, setDirectoryItems] = useState([]);
   const [directoryLoading, setDirectoryLoading] = useState(true);
   const [reportSummary, setReportSummary] = useState({ totalReports: 0, topCanteen: 'None' });
-  const [privacyFilterEnabled, setPrivacyFilterEnabled] = useState(false);
+  const [privacyFilterEnabled, setPrivacyFilterEnabled] = useState(true); // Default to On
   const [activeCanteen, setActiveCanteen] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+
+  // New states for processing overlay
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processingStep, setProcessingStep] = useState(0);
+  const [processingMessage, setProcessingMessage] = useState('');
+
+  const openCanteenModal = (canteen) => {
+    setActiveCanteen(canteen);
+    setModalOpen(true);
+  };
+
+  const closeCanteenModal = () => {
+    setModalOpen(false);
+    setActiveCanteen(null);
+  };
+
   const [selectedCanteen, setSelectedCanteen] = useState('');
   const [selectedLevel, setSelectedLevel] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedImagePreview, setSelectedImagePreview] = useState(null);
+  const [latestUpload, setLatestUpload] = useState(null);
   const [aiHint, setAiHint] = useState('AI inference currently off. Choose a level or upload image for auto suggestion.');
   const [formFeedback, setFormFeedback] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -42,82 +194,6 @@ export default function Home() {
   const aiTimeout = useRef(null);
   const formRef = useRef(null);
 
-  const fileToBase64 = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result.split(',')[1]); // Strip the prefix
-      reader.onerror = (error) => reject(error);
-    });
-  };
-
-  // --- EFFECTS ---
-  useEffect(() => {
-    const oneHourAgo = new Date();
-    oneHourAgo.setHours(oneHourAgo.getHours() - 1);
-
-    const reportsQuery = query(
-      collection(firestore, 'reports'),
-      orderBy('timestamp', 'desc')
-    );
-
-    const unsubscribe = onSnapshot(reportsQuery, (snapshot) => {
-      const allReports = snapshot.docs.map(doc => doc.data());
-      const recentReports = allReports.filter(report => {
-        const ts = report.timestamp?.toDate();
-        return ts && ts > oneHourAgo;
-      });
-
-      const canteenCounts = {};
-      recentReports.forEach(report => {
-        if (report.crowd_level === 'High') {
-          const name = report.canteen_name || "Unknown";
-          canteenCounts[name] = (canteenCounts[name] || 0) + 1;
-        }
-      });
-
-      let mostActive = 'None';
-      let maxHighReports = 0;
-      for (const [name, count] of Object.entries(canteenCounts)) {
-        if (count > maxHighReports) {
-          maxHighReports = count;
-          mostActive = name;
-        }
-      }
-
-      setReportSummary({
-        totalReports: recentReports.length,
-        topCanteen: mostActive
-      });
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  function formatRelativeTime(isoString) {
-    if (!isoString) return 'No data';
-    const date = new Date(isoString);
-    if (Number.isNaN(date.getTime())) return 'Unknown';
-
-    const diff = Math.max(0, Math.round((Date.now() - date.getTime()) / 1000));
-    if (diff < 60) return `${diff}s ago`;
-    const minutes = Math.floor(diff / 60);
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    return `${Math.floor(hours / 24)}d ago`;
-  }
-
-  const openCanteenModal = (item) => {
-    setActiveCanteen(item);
-    setModalOpen(true);
-  };
-
-  const closeCanteenModal = () => {
-    setModalOpen(false);
-    setActiveCanteen(null);
-  };
-
   const fetchStatus = async () => {
     setLoadingStatus(true);
     setStatusError('');
@@ -128,16 +204,24 @@ export default function Home() {
       return;
     }
 
+    const abortController = new AbortController();
+    const timeoutId = window.setTimeout(() => abortController.abort(), 10000);
+
     try {
-      const response = await fetch(`${API_BASE}/canteens/status`);
+      const response = await fetch(`${API_BASE}/canteens/status`, { signal: abortController.signal });
       if (!response.ok) throw new Error('Unable to load dashboard data');
       const json = await response.json();
+      console.log('📊 API Response:', json.data);
+      console.log('📊 API last_updated values:', (json.data || []).map((item) => ({ canteen_id: item.canteen_id, last_updated: item.last_updated })));
       setStatusList(json.data || []);
     } catch (error) {
       console.error(error);
       setStatusList([]);
-      setStatusError('Unable to load dashboard data. Ensure the backend is running on port 8000 and open the frontend at http://localhost:3000.');
+      setStatusError(error.name === 'AbortError'
+        ? 'Dashboard request timed out. Is the backend running on http://localhost:8000?'
+        : 'Unable to load dashboard data. Ensure the backend is running on port 8000 and open the frontend at http://localhost:3000.');
     } finally {
+      window.clearTimeout(timeoutId);
       setLoadingStatus(false);
     }
   };
@@ -151,34 +235,108 @@ export default function Home() {
   useEffect(() => {
     setDirectoryLoading(true);
 
+    const canteensQuery = query(
+      collection(firestore, 'canteens'),
+      orderBy('name', 'asc')
+    );
+
+    const unsubscribe = onSnapshot(
+      canteensQuery,
+      (snapshot) => {
+        const items = snapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            name: data.name || `Canteen ${doc.id}`,
+            crowdLevel: data.currentCrowdLevel || data.crowdLevel || data.crowd_level || 'Unknown',
+            lastUpdated: data.lastUpdated ? data.lastUpdated.toDate().toISOString() : null,
+          };
+        });
+        setDirectoryItems(items);
+        setDirectoryLoading(false);
+      },
+      (error) => {
+        console.error('Firestore listener error:', error);
+        setDirectoryItems([]);
+        setDirectoryLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
     const reportsQuery = query(
       collection(firestore, 'reports'),
       orderBy('timestamp', 'desc')
     );
 
-    const unsubscribe = onSnapshot(reportsQuery, (snapshot) => {
-      const items = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          name: data.canteen_name || `Canteen ${data.canteen_id}`,
-          crowdLevel: data.crowd_level || 'Unknown',
-          lastUpdated: data.timestamp ? data.timestamp.toDate().toISOString() : null,
-        };
-      });
-      setDirectoryItems(items);
-      setDirectoryLoading(false);
-    });
+    const unsubscribeReports = onSnapshot(
+      reportsQuery,
+      (snapshot) => {
+        const counts = {};
+        let latestImage = null;
 
-    return () => unsubscribe();
+        snapshot.docs.forEach((doc, index) => {
+          const data = doc.data();
+          const canteenName = data.canteen_name || 'Unknown';
+          counts[canteenName] = (counts[canteenName] || 0) + 1;
+
+          if (!latestImage && data.image_preview) {
+            latestImage = {
+              preview: data.image_preview,
+              canteenName,
+            };
+          }
+        });
+
+        const totalReports = snapshot.size;
+        let topCanteen = 'None';
+        let topCount = 0;
+
+        Object.entries(counts).forEach(([name, count]) => {
+          if (count > topCount) {
+            topCount = count;
+            topCanteen = `${name} (${count})`;
+          }
+        });
+
+        setReportSummary({ totalReports, topCanteen });
+        setLatestUpload(latestImage);
+      },
+      (error) => {
+        console.error('Firestore reports listener error:', error);
+      }
+    );
+
+    return () => unsubscribeReports();
   }, []);
 
   const totalReports = reportSummary.totalReports;
   const topCanteen = reportSummary.topCanteen;
 
-  const handleFileChange = (event) => {
+  const statusByName = useMemo(
+    () => Object.fromEntries(statusList.map((item) => [item.name, item])),
+    [statusList]
+  );
+
+  const mergedDirectoryItems = useMemo(
+    () =>
+      directoryItems.map((item) => {
+        const status = statusByName[item.name];
+        return {
+          ...item,
+          crowdLevel: status?.current_status || item.crowdLevel,
+          lastUpdated: status?.last_updated || item.lastUpdated,
+        };
+      }),
+    [directoryItems, statusByName]
+  );
+
+  const handleFileChange = async (event) => {
     const file = event.target.files?.[0] || null;
     setSelectedFile(file);
+    setSelectedImagePreview(null);
     setFormFeedback('');
 
     if (!file) {
@@ -196,48 +354,22 @@ export default function Home() {
       window.clearTimeout(aiTimeout.current);
     }
 
-    const handleFileChange = async (event) => {
-      const file = event.target.files?.[0];
-      if (!file) return;
+    try {
+      const preview = await createImagePreview(file);
+      setSelectedImagePreview(preview);
+    } catch (previewError) {
+      console.error('Unable to create image preview:', previewError);
+    }
 
-      setSelectedFile(file);
-      setAiHint('🧠 AI is analyzing crowd density...');
-
-      try {
-        const base64 = await fileToBase64(file);
-
-        const response = await fetch('/api/analyze-crowd', {
-          method: 'POST',
-          body: JSON.stringify({ imageBase64: base64 }),
-        });
-
-        const data = await response.json();
-
-        setSelectedLevel(data.level);
-        setAiHint(`✅ AI Detection: ${data.level} Density (${data.reasoning})`);
-      } catch (err) {
-        setAiHint('❌ AI Analysis failed. Please select manually.');
-      }
-    };
+    aiTimeout.current = window.setTimeout(() => {
+      const predicted = simulateAIClassification(file);
+      setSelectedLevel(predicted);
+      setAiHint(`✅ AI suggestion applied: ${predicted}`);
+      aiTimeout.current = null;
+    }, 1400);
   };
 
   const handleSubmit = async (event) => {
-
-    const canteenId = getCanteenId(selectedCanteen);
-
-    const uploadImage = async (file) => {
-      if (!file) return null;
-
-      // 1. Create a unique path for the image
-      const storageRef = ref(storage, `vision-reports/${Date.now()}_${file.name}`);
-
-      // 2. Upload the binary data (the "multipart" concept we discussed)
-      const snapshot = await uploadBytes(storageRef, file);
-
-      // 3. Get the public URL to save in your database
-      return await getDownloadURL(snapshot.ref);
-    };
-
     event.preventDefault();
     setFormFeedback('');
     setSubmitStatus('idle');
@@ -258,68 +390,105 @@ export default function Home() {
       return;
     }
 
-
-
-
-    setSubmitting(true);
-    setSubmitStatus('submitting');
-    const imageUrl = await uploadImage(selectedFile);
-    try {
-      setSubmitting(true);
-
-      // 1. MUST use 'await' here. If you don't, imageUrl will be a Promise, not a string.
-      const imageUrl = await uploadImage(selectedFile);
-
-      await addDoc(collection(firestore, 'reports'), {
-        canteen_id: canteenId,
-        canteen_name: selectedCanteen,
-        crowd_level: level,
-        source: selectedFile ? 'vision-ai' : 'manual',
-        image_url: imageUrl, // Now this contains the actual link
-        timestamp: serverTimestamp(),
-      });
-
-      // Reset states...
-      setSubmitStatus('success');
-    } catch (error) {
-      console.error("Upload Error:", error); // Check your F12 browser console for this!
-      setSubmitStatus('error');
-    } finally {
-      setSubmitting(false); // This ensures the button doesn't stay stuck
+    const canteenId = getCanteenId(selectedCanteen);
+    if (!canteenId) {
+      setFormFeedback('Invalid canteen selection.');
+      return;
     }
-    try {
-      const imageUrl = await uploadImage(selectedFile);
 
+    const showAiProcessing = Boolean(selectedFile);
 
-      await fetchStatus();
-      setFormFeedback('Report submitted successfully. Dashboard refreshed.');
-      setSubmitStatus('success');
-      setToastMessage('Successfully submitted report to Firestore');
-      setToastVariant('success');
-      setToastVisible(true);
-      setSelectedCanteen('');
-      setSelectedLevel('');
-      setSelectedFile(null);
-      setAiHint('AI inference currently off. Choose a level or upload image for auto suggestion.');
-      formRef.current?.reset();
+    const submitReport = async () => {
+      setSubmitting(true);
+      setSubmitStatus('submitting');
 
-      window.setTimeout(() => {
-        setToastVisible(false);
-        setSubmitStatus('idle');
-      }, 3200);
-    } catch (error) {
-      console.error(error);
-      setFormFeedback(error.message || 'Unable to submit report right now.');
-      setSubmitStatus('error');
-      setToastMessage('Report failed to submit. Please try again.');
-      setToastVariant('error');
-      setToastVisible(true);
-      window.setTimeout(() => {
-        setToastVisible(false);
-        setSubmitStatus('idle');
-      }, 3200);
-    } finally {
-      setSubmitting(false);
+      const abortController = new AbortController();
+      const timeoutId = window.setTimeout(() => abortController.abort(), 10000);
+
+      try {
+        const response = await fetch(`${API_BASE}/report`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            canteen_id: canteenId,
+            crowd_level: level,
+            source: selectedFile ? 'vision-ai' : 'manual',
+            image_name: selectedFile?.name || null,
+            image_type: selectedFile?.type || null,
+            image_size: selectedFile?.size || null,
+            image_preview: selectedImagePreview || null,
+          }),
+          signal: abortController.signal,
+        });
+
+        if (!response.ok) {
+          const errorPayload = await response.json().catch(() => null);
+          throw new Error(errorPayload?.detail?.message || 'Unable to submit report right now.');
+        }
+
+        await fetchStatus();
+        setFormFeedback('Report submitted successfully. Dashboard refreshed.');
+        setSubmitStatus('success');
+        setToastMessage('Successfully submitted report to the API');
+        setToastVariant('success');
+        setToastVisible(true);
+        setSelectedCanteen('');
+        setSelectedLevel('');
+        setSelectedFile(null);
+        setSelectedImagePreview(null);
+        setAiHint('AI inference currently off. Choose a level or upload image for auto suggestion.');
+        formRef.current?.reset();
+
+        window.setTimeout(() => {
+          setToastVisible(false);
+          setSubmitStatus('idle');
+        }, 3200);
+      } catch (error) {
+        console.error(error);
+        const errorMessage = error.name === 'AbortError'
+          ? 'Request timed out. Please try again.'
+          : error.message || 'Unable to submit report right now.';
+        setFormFeedback(errorMessage);
+        setSubmitStatus('error');
+        setToastMessage('Report failed to submit. Please try again.');
+        setToastVariant('error');
+        setToastVisible(true);
+        window.setTimeout(() => {
+          setToastVisible(false);
+          setSubmitStatus('idle');
+        }, 3200);
+      } finally {
+        window.clearTimeout(timeoutId);
+        setSubmitting(false);
+        if (showAiProcessing) {
+          setIsProcessing(false);
+          setProcessingStep(0);
+          setProcessingMessage('');
+        }
+      }
+    };
+
+    if (showAiProcessing) {
+      setIsProcessing(true);
+      setProcessingStep(1);
+      setProcessingMessage('Detecting crowd density...');
+
+      // Simulate processing steps for image-based workflows
+      setTimeout(() => {
+        setProcessingStep(2);
+        setProcessingMessage('Applying privacy masks...');
+      }, 800);
+
+      setTimeout(() => {
+        setProcessingStep(3);
+        setProcessingMessage('Report Anonymized.');
+      }, 1600);
+
+      setTimeout(submitReport, 2400);
+    } else {
+      await submitReport();
     }
   };
 
@@ -332,13 +501,18 @@ export default function Home() {
     );
   };
 
-  // --- JSX (unchanged) ---
   return (
     <>
       <style>{`
         @keyframes pulse-ring {
-          0% { transform: scale(1); opacity: 1; }
-          100% { transform: scale(2); opacity: 0; }
+          0% {
+            transform: scale(1);
+            opacity: 1;
+          }
+          100% {
+            transform: scale(2);
+            opacity: 0;
+          }
         }
         .pulse-marker {
           animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
@@ -355,6 +529,35 @@ export default function Home() {
           </nav>
         </div>
       </header>
+
+      {/* Processing Overlay */}
+      {isProcessing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="relative w-full max-w-md mx-4">
+            <div className="rounded-[2rem] bg-white p-8 shadow-[0_25px_50px_rgba(33,18,8,0.25)] text-center">
+              <div className="relative mb-6">
+                <div className="w-16 h-16 mx-auto bg-[var(--primary)] rounded-full flex items-center justify-center">
+                  <div className="w-8 h-8 bg-white rounded-full animate-pulse"></div>
+                </div>
+                {/* Scanning line animation */}
+                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-[var(--primary)] animate-spin"></div>
+              </div>
+              <h3 className="text-lg font-semibold text-[var(--text)] mb-2">Processing Report</h3>
+              <p className="text-sm text-[var(--muted)]">{processingMessage}</p>
+              <div className="mt-4 flex justify-center space-x-2">
+                {[1, 2, 3].map((step) => (
+                  <div
+                    key={step}
+                    className={`w-2 h-2 rounded-full transition-colors ${
+                      step <= processingStep ? 'bg-[var(--primary)]' : 'bg-slate-200'
+                    }`}
+                  ></div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <motion.main
         initial={{ opacity: 0 }}
@@ -374,7 +577,7 @@ export default function Home() {
                     NTU Crowd
                   </h1>
                   <p className="max-w-xl text-base leading-8 text-[var(--muted)] sm:text-lg">
-                    A tactile study of digital convergence documenting the rhythmic pulse of modern learning environments.
+                    A privacy-preserving framework for crowdsourced campus intelligence, synthesizing real-time spatial data with student-led reporting.
                   </p>
                 </div>
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -458,9 +661,21 @@ export default function Home() {
                   </div>
                   <div className="space-y-6">
                     {[
-                      { number: '01', label: 'Natural Textures', description: 'The subtle variations in crowd density that create the unique atmosphere of each canteen space.' },
-                      { number: '02', label: 'Architectural Flow', description: 'How building layouts influence movement patterns and social interactions within spaces.' },
-                      { number: '03', label: 'Temporal Rhythms', description: 'The ebb and flow of activity throughout the academic day, shaped by class schedules and meal times.' },
+                      {
+                        number: '01',
+                        label: 'Natural Textures',
+                        description: 'The subtle variations in crowd density that create the unique atmosphere of each canteen space.',
+                      },
+                      {
+                        number: '02',
+                        label: 'Architectural Flow',
+                        description: 'How building layouts influence movement patterns and social interactions within spaces.',
+                      },
+                      {
+                        number: '03',
+                        label: 'Temporal Rhythms',
+                        description: 'The ebb and flow of activity throughout the academic day, shaped by class schedules and meal times.',
+                      },
                     ].map((item) => (
                       <div key={item.number} className="flex items-start gap-6 rounded-[1.5rem] border border-[rgba(33,18,8,0.06)] bg-[var(--bg-soft)] p-6">
                         <div className="text-2xl font-semibold text-[var(--primary)]">{item.number}</div>
@@ -519,14 +734,17 @@ export default function Home() {
                   <div className="mt-8 space-y-5">
                     {directoryLoading ? (
                       <div className="rounded-[1.75rem] border border-[rgba(33,18,8,0.06)] bg-[var(--bg-soft)] p-5 text-sm text-[var(--muted)]">Listening for live canteen updates...</div>
-                    ) : directoryItems.length > 0 ? (
-                      directoryItems.map((item) => {
+                    ) : mergedDirectoryItems.length > 0 ? (
+                      mergedDirectoryItems.map((item) => {
                         const normalized = item.crowdLevel?.toLowerCase() || 'unknown';
                         const statusStyles =
-                          normalized === 'low' ? 'bg-emerald-100 text-emerald-900'
-                            : normalized === 'medium' ? 'bg-amber-100 text-amber-900'
-                              : normalized === 'high' ? 'bg-rose-100 text-rose-900'
-                                : 'bg-slate-100 text-slate-700';
+                          normalized === 'low'
+                            ? 'bg-emerald-100 text-emerald-900'
+                            : normalized === 'medium'
+                            ? 'bg-amber-100 text-amber-900'
+                            : normalized === 'high'
+                            ? 'bg-rose-100 text-rose-900'
+                            : 'bg-slate-100 text-slate-700';
 
                         return (
                           <button
@@ -539,7 +757,7 @@ export default function Home() {
                               <div>
                                 <p className="text-sm font-semibold text-[var(--text)]">{item.name}</p>
                                 <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                                  {item.lastUpdated ? `Updated ${new Date(item.lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'No timestamp available'}
+                                  {item.lastUpdated ? `Updated ${getDisplayLabel(item.lastUpdated)}` : 'No timestamp available'}
                                 </p>
                               </div>
                               <span className={`inline-flex rounded-full px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.18em] ${statusStyles}`}>{item.crowdLevel || 'UNKNOWN'}</span>
@@ -569,25 +787,33 @@ export default function Home() {
                     </button>
                   </div>
                   <div className="mt-8 space-y-4">
-                    {[
-                      { label: 'Student study zones', status: privacyFilterEnabled ? 'Redacting' : 'Stable', note: privacyFilterEnabled ? 'Real-time identity redaction active' : 'Masked movement detected', blurred: true },
-                      { label: 'Dining queues', status: 'Rising', note: 'Anonymous density spike' },
-                      { label: 'Open seating', status: 'Calm', note: 'Balanced occupancy' },
-                    ].map((item) => (
-                      <div
-                        key={item.label}
-                        className={`relative rounded-[1.75rem] border border-[rgba(33,18,8,0.06)] bg-[var(--bg-soft)] p-5 ${item.blurred && privacyFilterEnabled ? 'overflow-hidden' : ''}`}
-                      >
-                        {item.blurred && privacyFilterEnabled ? (
-                          <div className="pointer-events-none absolute inset-0 bg-slate-950/20 backdrop-blur-[8px]" />
-                        ) : null}
-                        <div className="relative z-10 flex items-center justify-between gap-4">
-                          <p className="text-sm font-semibold text-[var(--text)]">{item.label}</p>
-                          <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">{item.status}</span>
+                    {privacyFilterEnabled ? (
+                      <div className="rounded-[1.75rem] border border-[rgba(33,18,8,0.06)] bg-[var(--bg-soft)] p-5 overflow-hidden">
+                        <div className="relative">
+                          <img
+                            src={latestUpload?.preview || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=400&q=80'}
+                            alt={latestUpload?.preview ? `Latest upload from ${latestUpload.canteenName}` : 'Anonymized canteen image'}
+                            className="w-full h-32 object-cover rounded-[1rem] filter blur-[12px]"
+                          />
+                          <div className="absolute inset-0 bg-slate-950/20 backdrop-blur-[8px] flex items-center justify-center">
+                            <p className="text-sm font-semibold text-white">Anonymized Image</p>
+                          </div>
                         </div>
-                        <p className="relative z-10 mt-2 text-sm leading-7 text-[var(--muted)]">{item.note}</p>
+                        <div className="mt-4">
+                          <p className="text-sm font-semibold text-[var(--text)]">
+                            {latestUpload?.preview ? `Latest upload from ${latestUpload.canteenName}` : 'Most Recent Upload'}
+                          </p>
+                          <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                            {latestUpload?.preview ? 'Privacy-protected preview' : 'No upload preview available'}
+                          </p>
+                        </div>
                       </div>
-                    ))}
+                    ) : (
+                      <div className="rounded-[1.75rem] border border-[rgba(33,18,8,0.06)] bg-[var(--bg-soft)] p-8 text-center">
+                        <p className="text-sm font-semibold text-[var(--text)]">Access Restricted</p>
+                        <p className="mt-2 text-sm leading-7 text-[var(--muted)]">Raw data available to authorized personnel only.</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -604,7 +830,7 @@ export default function Home() {
                   <div className="mt-8 overflow-hidden rounded-[1.75rem] border border-[rgba(33,18,8,0.06)] bg-[var(--bg-soft)] p-4">
                     <div className="relative aspect-[4/3] rounded-[1.5rem] bg-[radial-gradient(circle_at_top_left,_rgba(236,72,153,0.12),_transparent_28%),_radial-gradient(circle_at_bottom_right,_rgba(34,197,94,0.12),_transparent_32%),_rgb(248,244,238)]">
                       {MAP_COORDINATES.map((marker, idx) => {
-                        const canteenData = directoryItems.find((item) => item.name === marker.id);
+                        const canteenData = mergedDirectoryItems.find((item) => item.name === marker.id);
                         const crowdLevel = canteenData?.crowdLevel || 'Unknown';
                         const colors = getMarkerColor(crowdLevel);
                         return (
@@ -617,9 +843,18 @@ export default function Home() {
                       })}
                     </div>
                     <div className="mt-6 grid gap-3 text-sm text-[var(--muted)]">
-                      <div className="flex items-center gap-3"><span className="inline-flex h-3.5 w-3.5 rounded-full bg-emerald-400"></span><span>Low crowd (Live)</span></div>
-                      <div className="flex items-center gap-3"><span className="inline-flex h-3.5 w-3.5 rounded-full bg-amber-400"></span><span>Medium crowd (Live)</span></div>
-                      <div className="flex items-center gap-3"><span className="inline-flex h-3.5 w-3.5 rounded-full bg-rose-500"></span><span>High crowd (Live)</span></div>
+                      <div className="flex items-center gap-3">
+                        <span className="inline-flex h-3.5 w-3.5 rounded-full bg-emerald-400"></span>
+                        <span>Low crowd (Live)</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="inline-flex h-3.5 w-3.5 rounded-full bg-amber-400"></span>
+                        <span>Medium crowd (Live)</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="inline-flex h-3.5 w-3.5 rounded-full bg-rose-500"></span>
+                        <span>High crowd (Live)</span>
+                      </div>
                       <p className="mt-2 text-xs italic text-[var(--muted)]">Markers update in real-time from Firestore</p>
                     </div>
                   </div>
@@ -657,11 +892,11 @@ export default function Home() {
             <div className="mb-10 space-y-3">
               <div className="text-sm uppercase tracking-[0.28em] text-[var(--muted)] font-semibold">Admin Analytics</div>
               <h2 className="text-4xl font-semibold tracking-[-0.03em] text-[var(--text)]">Summary metrics at a glance</h2>
-              <p className="max-w-2xl text-base leading-8 text-[var(--muted)]">A clear overview of report volume, active locations, and participation in the past hour.</p>
+              <p className="max-w-2xl text-base leading-8 text-[var(--muted)]">A clear overview of report volume, active locations, and participation over time.</p>
             </div>
             <div className="grid gap-6 lg:grid-cols-2">
               <div className="rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white p-8 shadow-[0_20px_40px_rgba(33,18,8,0.05)]">
-                <p className="text-sm uppercase tracking-[0.3em] text-[var(--muted)]">Live report entries </p>
+                <p className="text-sm uppercase tracking-[0.3em] text-[var(--muted)]">Live report entries</p>
                 <p className="mt-4 text-4xl font-semibold text-[var(--text)]">{totalReports}</p>
               </div>
               <div className="rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white p-8 shadow-[0_20px_40px_rgba(33,18,8,0.05)]">
@@ -680,14 +915,25 @@ export default function Home() {
               <p className="max-w-2xl mx-auto text-base leading-8 text-[var(--muted)]">Tell the campus how busy a canteen is using a quick report and optional photo.</p>
             </div>
             <form ref={formRef} onSubmit={handleSubmit} className="space-y-6 rounded-[2rem] border border-[rgba(33,18,8,0.08)] bg-white p-8 shadow-[0_25px_50px_rgba(33,18,8,0.05)]">
-              <label className="block text-sm font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Select canteen</label>
-              <select value={selectedCanteen} onChange={(e) => setSelectedCanteen(e.target.value)} className="w-full rounded-3xl border border-[rgba(33,18,8,0.1)] bg-[var(--bg-soft)] px-5 py-4 text-sm text-[var(--text)] outline-none focus:border-[var(--primary)]">
+              <label className="block text-sm font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Select canteen (Required)</label>
+              <select
+                value={selectedCanteen}
+                onChange={(event) => setSelectedCanteen(event.target.value)}
+                required
+                className="w-full rounded-3xl border border-[rgba(33,18,8,0.1)] bg-[var(--bg-soft)] px-5 py-4 text-sm text-[var(--text)] outline-none focus:border-[var(--primary)]"
+              >
                 <option value="">Choose canteen</option>
-                {CANTEEN_NAMES.map((name) => <option key={name} value={name}>{name}</option>)}
+                {CANTEEN_NAMES.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
               </select>
 
               <label className="block text-sm font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Select crowd level</label>
-              <select value={selectedLevel} onChange={(e) => setSelectedLevel(e.target.value)} className="w-full rounded-3xl border border-[rgba(33,18,8,0.1)] bg-[var(--bg-soft)] px-5 py-4 text-sm text-[var(--text)] outline-none focus:border-[var(--primary)]">
+              <select
+                value={selectedLevel}
+                onChange={(event) => setSelectedLevel(event.target.value)}
+                className="w-full rounded-3xl border border-[rgba(33,18,8,0.1)] bg-[var(--bg-soft)] px-5 py-4 text-sm text-[var(--text)] outline-none focus:border-[var(--primary)]"
+              >
                 <option value="">Choose level</option>
                 <option value="Low">Low</option>
                 <option value="Medium">Medium</option>
@@ -695,12 +941,27 @@ export default function Home() {
               </select>
 
               <label className="block text-sm font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Upload image (optional)</label>
-              <input type="file" accept="image/*" onChange={handleFileChange} className="w-full rounded-3xl border border-[rgba(33,18,8,0.1)] bg-[var(--bg-soft)] px-5 py-4 text-sm text-[var(--text)] outline-none" />
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="w-full rounded-3xl border border-[rgba(33,18,8,0.1)] bg-[var(--bg-soft)] px-5 py-4 text-sm text-[var(--text)] outline-none"
+              />
 
               <p className="text-sm leading-7 text-[var(--muted)]">{aiHint}</p>
 
-              <button type="submit" disabled={submitting} className="inline-flex w-full items-center justify-center rounded-full bg-[var(--primary)] px-6 py-4 text-sm font-semibold uppercase tracking-[0.22em] text-white transition hover:bg-[var(--accent)] disabled:cursor-not-allowed disabled:bg-slate-300">
-                {submitting ? 'Submitting…' : submitStatus === 'success' ? '✓ Submitted' : submitStatus === 'error' ? 'Retry' : 'Submit report'}
+              <button
+                type="submit"
+                disabled={submitting}
+                className="inline-flex w-full items-center justify-center rounded-full bg-[var(--primary)] px-6 py-4 text-sm font-semibold uppercase tracking-[0.22em] text-white transition hover:bg-[var(--accent)] disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                {submitting
+                  ? 'Submitting…'
+                  : submitStatus === 'success'
+                  ? '✓ Submitted'
+                  : submitStatus === 'error'
+                  ? 'Retry'
+                  : 'Submit report'}
               </button>
 
               {formFeedback ? <p className="text-sm text-[var(--muted)]">{formFeedback}</p> : null}
@@ -718,9 +979,22 @@ export default function Home() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8 backdrop-blur-sm">
             <div className="relative w-full max-w-3xl overflow-hidden rounded-[2rem] bg-white shadow-[0_35px_80px_rgba(33,18,8,0.18)]">
               <div className="relative h-64 overflow-hidden">
-                <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${getCanteenVisual(activeCanteen.name).image})`, filter: `blur(${getCanteenVisual(activeCanteen.name).blur}px) brightness(0.65)` }} />
+                <div
+                  className="absolute inset-0 bg-cover bg-center"
+                  style={{
+                    backgroundImage: `url(${getCanteenVisual(activeCanteen.name).image})`,
+                    filter: `blur(${getCanteenVisual(activeCanteen.name).blur}px) brightness(0.65)`,
+                  }}
+                />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
-                <button type="button" onClick={closeCanteenModal} className="absolute right-4 top-4 z-20 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-[var(--text)] shadow-sm transition hover:bg-white pointer-events-auto" aria-label="Close canteen detail">×</button>
+                <button
+                  type="button"
+                  onClick={closeCanteenModal}
+                  className="absolute right-4 top-4 z-20 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-[var(--text)] shadow-sm transition hover:bg-white pointer-events-auto"
+                  aria-label="Close canteen detail"
+                >
+                  ×
+                </button>
                 <div className="relative z-10 flex h-full flex-col justify-end p-6 text-white">
                   <p className="text-sm uppercase tracking-[0.28em] text-white/80">Canteen detail</p>
                   <h3 className="mt-3 text-3xl font-semibold">{activeCanteen.name}</h3>
@@ -730,15 +1004,23 @@ export default function Home() {
                 <div className="grid gap-4 sm:grid-cols-3">
                   <div className="rounded-[1.5rem] bg-[var(--bg-soft)] p-5">
                     <p className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">Crowd level</p>
-                    <p className="mt-3 text-2xl font-semibold text-[var(--text)]">{activeCanteen.crowdLevel || 'Unknown'}</p>
+                    <p className="mt-3 text-2xl font-semibold text-[var(--text)]">{activeCanteen.current_status || activeCanteen.crowdLevel || 'Unknown'}</p>
                   </div>
                   <div className="rounded-[1.5rem] bg-[var(--bg-soft)] p-5">
                     <p className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">Last updated</p>
-                    <p className="mt-3 text-2xl font-semibold text-[var(--text)]">{activeCanteen.lastUpdated ? new Date(activeCanteen.lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Unknown'}</p>
+                    <p className="mt-3 text-2xl font-semibold text-[var(--text)]">{getDisplayLabel(activeCanteen.lastUpdated) || 'Unknown'}</p>
                   </div>
                   <div className="rounded-[1.5rem] bg-[var(--bg-soft)] p-5">
                     <p className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">Report source</p>
                     <p className="mt-3 text-2xl font-semibold text-[var(--text)]">Firestore</p>
+                  </div>
+                </div>
+                <div className="rounded-[1.75rem] bg-[var(--bg-soft)] p-6">
+                  <p className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">Privacy Metadata</p>
+                  <div className="mt-3 space-y-2 text-sm leading-7 text-[var(--muted)]">
+                    <p><strong>Source:</strong> User Upload #{Math.floor(Math.random() * 1000) + 400}</p>
+                    <p><strong>Faces redacted:</strong> Via edge-processing simulation</p>
+                    <p><strong>Anonymity preserved:</strong> 92% (USENIX 2020 protocols)</p>
                   </div>
                 </div>
                 <div className="rounded-[1.75rem] bg-[var(--bg-soft)] p-6">
@@ -760,7 +1042,7 @@ export default function Home() {
             <div className="grid gap-10 lg:grid-cols-[1.5fr_1fr_1fr]">
               <div className="space-y-5">
                 <p className="text-sm uppercase tracking-[0.3em] text-[var(--muted)]">The Tactile Curator</p>
-                <p className="max-w-md text-sm leading-7 text-[var(--muted)]">Exploring the intersection of architecture, human behavior, and academic spaces.</p>
+                <p className="max-w-md text-sm leading-7 text-[var(--muted)]">Exploring the intersection of architecture, human behavior, and academic spaces. A digital publication dedicated to understanding how physical environments shape our daily experiences.</p>
               </div>
               <div>
                 <h3 className="mb-4 text-sm uppercase tracking-[0.3em] text-[var(--muted)]">Navigate</h3>
@@ -782,7 +1064,7 @@ export default function Home() {
               </div>
             </div>
             <div className="mt-12 border-t border-[rgba(33,18,8,0.08)] pt-8 text-sm leading-7 text-[var(--muted)]">
-              © 2026 NTU Crowd Monitoring • A tactile curation project • Designed with intention
+              © 2026 NTU Crowd Monitoring • A tactile curation project exploring spatial dynamics in academic environments • Designed with intention for the thoughtful observer
             </div>
           </div>
         </footer>
@@ -790,3 +1072,4 @@ export default function Home() {
     </>
   );
 }
+

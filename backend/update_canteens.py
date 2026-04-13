@@ -1,40 +1,50 @@
 """
-Update canteens collection in Firestore with simplified IDs and null coordinates
+Update canteens collection in Firestore with complete location details and randomized lastUpdated timestamps.
 """
+import random
+from datetime import datetime, timedelta
 from google.cloud import firestore
 from database import get_db
 
-# Simplified list with numerical IDs and empty coordinates
 CANTEENS_DATA = [
-    {"id": "1", "name": "Canteen 1", "lat": 1.345693, "lng": 103.687562, "location": "Hall 1"},
-    {"id": "2", "name": "Canteen 2", "lat": None, "lng": None, "location": "Hall 2"},
-    {"id": "3", "name": "Canteen 4", "lat": None, "lng": None, "location": "Hall 4"},
-    {"id": "4", "name": "Canteen 9", "lat": None, "lng": None, "location": "Hall 9"},
+    {"id": "1", "name": "Canteen 1 (Hall 1)", "lat": 1.345693, "lng": 103.687562, "location": "Hall 1"},
+    {"id": "2", "name": "Canteen 2 (Hall 2)", "lat": 1.3481, "lng": 103.6854, "location": "Hall 2"},
+    {"id": "3", "name": "Canteen 4 (Hall 4)", "lat": 1.3440, "lng": 103.6860, "location": "Hall 4"},
+    {"id": "13", "name": "Canteen 5", "lat": 1.3475, "lng": 103.6784, "location": "Hall 5"},
+    {"id": "4", "name": "Canteen 9 (Hall 9)", "lat": 1.3521, "lng": 103.6849, "location": "Hall 9"},
     {"id": "5", "name": "Canteen 11", "lat": 1.355034, "lng": 103.685917, "location": "Hall 11"},
     {"id": "6", "name": "Canteen 14", "lat": 1.352906, "lng": 103.682304, "location": "Hall 14"},
     {"id": "7", "name": "Canteen 16", "lat": 1.349720, "lng": 103.681284, "location": "Hall 16"},
-    {"id": "8", "name": "North Hill Food Court", "lat": None, "lng": None, "location": "North Hill"},
-    {"id": "9", "name": "Crescent Food Court", "lat": None, "lng": None, "location": "Crescent Hall"},
+    {"id": "8", "name": "North Hill Food Court", "lat": 1.3487, "lng": 103.6890, "location": "North Hill"},
+    {"id": "9", "name": "Crescent Food Court", "lat": 1.3490, "lng": 103.6860, "location": "Crescent Hall"},
     {"id": "10", "name": "Northspine food court (Canteen A)", "lat": 1.348440, "lng": 103.685478, "location": "North Spine"},
-    {"id": "11", "name": "Southspine food court (Canteen B)", "lat": None, "lng": None, "location": "South Spine"},
-    {"id": "12", "name": "Quad Cafe", "lat": None, "lng": None, "location": "School of Biological Sciences"},
-    {"id": "13", "name": "Pioneer Food Court", "lat": None, "lng": None, "location": "Pioneer Hall"},
-    {"id": "14", "name": "Nanyang Crescent Food Court", "lat": None, "lng": None, "location": "Nanyang Crescent Hall"}
+    {"id": "11", "name": "Southspine food court (Canteen B)", "lat": 1.3424, "lng": 103.6823, "location": "South Spine"},
+    {"id": "12", "name": "Quad Cafe", "lat": 1.3505, "lng": 103.6860, "location": "School of Biological Sciences"},
+    {"id": "14", "name": "Nanyang Crescent Food Court", "lat": 1.3528, "lng": 103.6808, "location": "Nanyang Crescent Hall"}
 ]
 
+
+def random_last_updated():
+    """Return a random timestamp around today at 16:30 ± 5 minutes."""
+    today = datetime.now()
+    base = today.replace(hour=16, minute=30, second=0, microsecond=0)
+    offset_seconds = random.randint(-300, 300)
+    return base + timedelta(seconds=offset_seconds)
+
 def update_canteens():
-    """Update all canteens in Firestore with simplified IDs"""
+    """Update all canteens in Firestore with simplified IDs and lastUpdated timestamps."""
     try:
         db = get_db()
         
         for canteen in CANTEENS_DATA:
             canteen_id = canteen.pop("id")
+            last_updated = random_last_updated()
             doc_ref = db.collection("canteens").document(canteen_id)
             # Use merge=True so you don't overwrite existing reports if they exist
-            doc_ref.set(canteen, merge=True)
-            print(f"✅ Created/Updated ID {canteen_id}: {canteen['name']}")
+            doc_ref.set({**canteen, "lastUpdated": last_updated}, merge=True)
+            print(f"✅ Created/Updated ID {canteen_id}: {canteen['name']} at {last_updated.isoformat()}")
         
-        print(f"\n✅ Successfully updated {len(CANTEENS_DATA)} canteens with clean IDs!")
+        print(f"\n✅ Successfully updated {len(CANTEENS_DATA)} canteens with timestamped metadata!")
         
     except Exception as e:
         print(f"❌ Error updating canteens: {e}")

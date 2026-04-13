@@ -1,7 +1,7 @@
 """
 Report submission endpoints - Refactored for Phase 2
 """
-from datetime import datetime
+import datetime
 from fastapi import APIRouter, HTTPException, Request
 
 # Native Firebase/Google Cloud imports
@@ -50,24 +50,22 @@ async def submit_report(request_payload: ReportRequest, request: Request):
             "canteen_name": canteen_doc.to_dict().get("name", "Unknown"),
             "crowd_level": request_payload.crowd_level,
             "source": request_payload.source or "manual",
+            "image_name": request_payload.image_name,
+            "image_type": request_payload.image_type,
+            "image_size": request_payload.image_size,
+            "image_preview": request_payload.image_preview,
             "timestamp": firestore.SERVER_TIMESTAMP,
             "user_id": "anon_user"
         }
         
         new_report_ref = db.collection("reports").document()
         new_report_ref.set(report_data)
-
-        # 4. Sync metadata to Canteen document for quick sorting/previews
-        canteen_ref.update({
-            "lastUpdated": firestore.SERVER_TIMESTAMP,
-            "currentCrowdLevel": request_payload.crowd_level 
-        })
         
         return ReportResponse(
             status="success",
             message="Report submitted successfully",
             report_id=new_report_ref.id,
-            timestamp=datetime.now(datetime.timezone.utc).isoformat() + "Z"
+            timestamp=datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"
         )
         
     except HTTPException:
@@ -86,5 +84,5 @@ async def health_check():
     return {
         "status": "ok",
         "message": "Campus-Flow API is healthy",
-        "timestamp": datetime.now(datetime.timezone.utc).isoformat()
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
     }
