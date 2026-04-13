@@ -34,10 +34,12 @@ CROWDBYTE synthesizes privacy-preserving engineering with real-time campus dynam
 - **State Management**: React Hooks + Firebase Real-time Listeners
 
 ### Backend
-- **Framework**: FastAPI (Python)
+- **Framework**: Next.js API Routes (Node.js environment)
 - **Database**: Google Cloud Firestore (Firebase)
+- **AI Inference**: Google Gemini 1.5 Flash API (Vision-to-Status pipeline)
 - **Security**: In-memory Rate Limiting (3 reports per 5 minutes per user)
 - **Validation**: Pydantic models for strict data integrity
+- **Archiecture**: Serverless Edge Functions handling secure API calls and prompt engineering.
 
 ## Project Structure
 
