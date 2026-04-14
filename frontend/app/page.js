@@ -1258,7 +1258,7 @@ export default function Home() {
                             </div>
                           );
                         })
-                        })
+                        }
                       </div>
                     ) : (
                       <div className="rounded-[1.75rem] border border-[rgba(33,18,8,0.06)] bg-[var(--bg-soft)] p-5 text-sm text-[var(--muted)]">No directory items found in Firestore.</div>
