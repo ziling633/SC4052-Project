@@ -981,7 +981,8 @@ export default function Home() {
                     NTU Crowd
                   </h1>
                   <p className="max-w-xl text-base leading-8 text-[var(--muted)] sm:text-lg">
-                    A privacy-preserving framework for crowdsourced campus intelligence, synthesizing real-time spatial data with student-led reporting.
+                    A student-powered system for real-time canteen crowd tracking.
+                    Report what you see, and instantly help others decide where to eat with no accounts, no tracking, just useful data.
                   </p>
                 </div>
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -1681,7 +1682,8 @@ export default function Home() {
             <div className="grid gap-10 lg:grid-cols-[1.5fr_1fr_1fr]">
               <div className="space-y-5">
                 <p className="text-sm uppercase tracking-[0.3em] text-[var(--muted)]">CROWDBYTE</p>
-                <p className="max-w-md text-sm leading-7 text-[var(--muted)]">Synthesizing privacy-preserving engineering with real-time campus dynamics. A digital initiative dedicated to understanding the rhythmic pulse of communal dining at NTU through anonymized, student-led reporting.</p>
+                <p className="max-w-md text-sm leading-7 text-[var(--muted)]">Synthesizing privacy-preserving engineering with real-time campus insights.
+                  A digital initiative that uses anonymized, student-led reporting to track and reflect canteen crowd levels across NTU. </p>
               </div>
               <div>
                 <h3 className="mb-4 text-sm uppercase tracking-[0.3em] text-[var(--muted)]">Navigate</h3>
