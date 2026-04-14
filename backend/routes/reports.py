@@ -17,23 +17,29 @@ router = APIRouter(prefix="/api/v1")
 @router.post("/report", response_model=ReportResponse)
 async def submit_report(request_payload: ReportRequest, request: Request):
     """
-    Submit a crowd report with rate limiting and database validation.
+    Submit a crowd report with rate limiting scoped per canteen and database validation.
     """
     try:
         db = get_db()
-        # Use the client's IP address as a unique identifier for rate limiting
         user_host = request.client.host 
         
-        # 1. Check Rate Limiter (3 reports / 5 minutes)
-        if not global_rate_limiter.is_allowed(user_host):
-            retry_after = global_rate_limiter.get_retry_after(user_host)
+        # --- UPDATED LOGIC ---
+        # Create a unique key for (User + Specific Canteen)
+        # This allows you to submit a report for Canteen A, and then immediately Canteen B,
+        # but prevents spamming the SAME canteen multiple times.
+        rate_limit_key = f"{user_host}:{request_payload.canteen_id}"
+        
+        # 1. Check Rate Limiter using the canteen-specific key
+        if not global_rate_limiter.is_allowed(rate_limit_key):
+            retry_after = global_rate_limiter.get_retry_after(rate_limit_key)
             raise HTTPException(
                 status_code=429, 
                 detail={
-                    "message": "Too many reports. Please wait before submitting again.",
+                    "message": f"You've already reported for this canteen recently. Please wait {retry_after}s.",
                     "retry_after_seconds": retry_after
                 }
             )
+        # ---------------------
         
         # 2. Validate that the canteen exists
         canteen_ref = db.collection("canteens").document(request_payload.canteen_id)
@@ -69,11 +75,9 @@ async def submit_report(request_payload: ReportRequest, request: Request):
         )
         
     except HTTPException:
-        # Re-raise FastAPI-specific errors (429, 404, etc.)
         raise
     except Exception as e:
-        print(f"❌ Error submitting report: {e}")
-        # Capture the error message for debugging
+        print(f"Error submitting report: {e}")
         error_msg = str(e)
         if "maximum allowed size" in error_msg.lower() or "too large" in error_msg.lower():
             raise HTTPException(
@@ -84,6 +88,8 @@ async def submit_report(request_payload: ReportRequest, request: Request):
             status_code=500,
             detail={"message": f"An internal error occurred while saving your report: {error_msg}"}
         )
+
+# ... health_check remains the same
 
 @router.get("/health")
 async def health_check():
