@@ -56,25 +56,30 @@ def get_bucket():
     return bucket
 
 # Upload image to storage
-def upload_image_to_storage(base64_image: str, file_name: str) -> str:
+def upload_image_to_storage(base64_image: str, canteen_name: str) -> str:
     """
     Upload base64 image to Firebase Storage and return download URL
     
     Args:
         base64_image: Base64 encoded image string (may include data URI prefix)
-        file_name: Name for the file in storage (e.g., 'report_12345.jpg')
+        canteen_name: Name of the canteen for the filename
     
     Returns:
         str: Public download URL for the image, or None if upload fails
     """
     try:
         import base64
-        from io import BytesIO
+        from datetime import datetime
         
         bucket = get_bucket()
         if bucket is None:
             print("⚠️  Storage bucket not available")
             return None
+        
+        # Generate filename: CanteenName_YYYY-MM-DD_HH-MM-SS.jpg
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        clean_canteen_name = canteen_name.replace(" ", "_").replace("(", "").replace(")", "").strip()
+        file_name = f"{clean_canteen_name}_{timestamp}.jpg"
         
         # Remove data URI prefix if present (e.g., "data:image/jpeg;base64,")
         if "," in base64_image:

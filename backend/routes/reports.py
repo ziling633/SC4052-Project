@@ -82,8 +82,8 @@ async def submit_report(request_payload: ReportRequest, request: Request):
             
             # Attempt upload, but don't fail the report if it fails
             try:
-                file_name = f"{request_payload.canteen_id}_{uuid.uuid4().hex[:8]}.jpg"
-                image_url = upload_image_to_storage(request_payload.image_preview, file_name)
+                canteen_name = canteen_doc.to_dict().get("name", "Unknown")
+                image_url = upload_image_to_storage(request_payload.image_preview, canteen_name)
                 if image_url:
                     report_data["image_preview_url"] = image_url
             except Exception as e:
