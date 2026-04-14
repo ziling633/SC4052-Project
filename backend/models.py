@@ -9,7 +9,7 @@ from datetime import datetime
 class ReportRequest(BaseModel):
     """Request model for submitting a crowd report"""
     canteen_id: str = Field(..., description="ID of the canteen")
-    crowd_level: str = Field(..., description="Must be 'Low', 'Medium', or 'High'")
+    crowd_level: Optional[str] = Field(default=None, description="Crowd level or None for AI detection. Must be 'Low', 'Medium', 'High', or None")
     source: str = Field(default="manual", description="Source of report: 'manual' or 'vision-ai'")
     image_name: Optional[str] = Field(default=None, description="Original file name uploaded by the user")
     image_type: Optional[str] = Field(default=None, description="MIME type of the uploaded image")

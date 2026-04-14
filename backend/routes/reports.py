@@ -12,6 +12,7 @@ from google.cloud import firestore
 from models import ReportRequest, ReportResponse
 from database import get_db, upload_image_to_storage
 from logic.rate_limiter import global_rate_limiter
+from logic.vision_analysis import analyze_crowd_level
 
 router = APIRouter(prefix="/api/v1")
 
@@ -51,22 +52,22 @@ async def submit_report(request_payload: ReportRequest, request: Request):
                 detail=f"Canteen ID {request_payload.canteen_id} does not exist"
             )
         
-        # 3. Prepare and save the report document
-        report_data = {
-            "canteen_id": request_payload.canteen_id,
-            "canteen_name": canteen_doc.to_dict().get("name", "Unknown"),
-            "crowd_level": request_payload.crowd_level,
-            "source": request_payload.source or "manual",
-            "image_name": request_payload.image_name,
-            "image_type": request_payload.image_type,
-            "image_size": request_payload.image_size,
-            "image_preview_url": None,  # Will be populated if image provided
-            "timestamp": firestore.SERVER_TIMESTAMP,
-            "user_id": "anon_user"
-        }
+        # 2b. Validate: user must provide either manual crowd level OR image for AI
+        if not request_payload.crowd_level and not request_payload.image_preview:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "message": "Please either select a crowd level manually or upload an image for AI detection"
+                }
+            )
         
-        # 3a. If image preview provided, validate size and upload to Storage
-        if request_payload.image_preview:
+        # 3. Initialize report data
+        crowd_level_final = request_payload.crowd_level
+        source_final = request_payload.source or "manual"
+        ai_analysis = None
+        
+        # 3a. If image provided AND user didn't manually select crowd level, use AI to detect
+        if request_payload.image_preview and not request_payload.crowd_level:
             # Validate image size (3MB limit for base64 encoded data)
             MAX_SIZE_BYTES = 3 * 1024 * 1024
             base64_size = len(request_payload.image_preview)
@@ -80,7 +81,55 @@ async def submit_report(request_payload: ReportRequest, request: Request):
                     }
                 )
             
-            # Attempt upload, but don't fail the report if it fails
+            # Use OpenAI Vision to analyze crowd level
+            print("🔍 Analyzing image with GPT-4 Vision...")
+            ai_analysis = analyze_crowd_level(request_payload.image_preview)
+            
+            if ai_analysis and ai_analysis.get("crowd_level") != "Unknown":
+                crowd_level_final = ai_analysis["crowd_level"]
+                source_final = "vision-ai"
+                print(f"✅ AI Analysis: {crowd_level_final} (confidence: {ai_analysis.get('confidence', 0)}%)")
+            else:
+                print(f"⚠️  AI Analysis failed: {ai_analysis.get('error', 'Unknown error')}")
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "message": f"AI analysis failed. Please select a crowd level manually. Error: {ai_analysis.get('error', 'Unknown')}"
+                    }
+                )
+        elif request_payload.image_preview and request_payload.crowd_level:
+            # User manually set crowd level, validate image size but don't run AI
+            MAX_SIZE_BYTES = 3 * 1024 * 1024
+            base64_size = len(request_payload.image_preview)
+            estimated_actual_size = base64_size * 0.75
+            
+            if estimated_actual_size > MAX_SIZE_BYTES:
+                raise HTTPException(
+                    status_code=413,
+                    detail={
+                        "message": f"Image is too large (~{estimated_actual_size / 1024 / 1024:.1f}MB). Maximum allowed is 3MB."
+                    }
+                )
+            print("📸 Using manual crowd level (AI skipped due to user selection)")
+        
+        # 3b. Prepare report document
+        report_data = {
+            "canteen_id": request_payload.canteen_id,
+            "canteen_name": canteen_doc.to_dict().get("name", "Unknown"),
+            "crowd_level": crowd_level_final,
+            "source": source_final,
+            "image_name": request_payload.image_name,
+            "image_type": request_payload.image_type,
+            "image_size": request_payload.image_size,
+            "image_preview_url": None,  # Will be populated if image provided
+            "ai_confidence": ai_analysis.get("confidence", 0) if ai_analysis else 0,
+            "ai_reasoning": ai_analysis.get("description", "") if ai_analysis else "",
+            "timestamp": firestore.SERVER_TIMESTAMP,
+            "user_id": "anon_user"
+        }
+        
+        # 3c. Upload image to Storage
+        if request_payload.image_preview:
             try:
                 canteen_name = canteen_doc.to_dict().get("name", "Unknown")
                 image_url = upload_image_to_storage(request_payload.image_preview, canteen_name)

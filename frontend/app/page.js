@@ -125,11 +125,9 @@ function pickBestCrowdLevel(...values) {
 }
 
 function simulateAIClassification(file) {
+  // Placeholder - real AI analysis happens on the backend with OpenAI GPT-4 Vision
   if (!file) return 'Unknown';
-  const mod = file.size % 3;
-  if (mod === 0) return 'Low';
-  if (mod === 1) return 'Medium';
-  return 'High';
+  return 'Analyzing...';
 }
 
 function compressImage(file, maxWidth = 800, quality = 0.7) {
@@ -284,7 +282,7 @@ export default function Home() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [selectedImagePreview, setSelectedImagePreview] = useState(null);
   const [latestUpload, setLatestUpload] = useState(null);
-  const [aiHint, setAiHint] = useState('AI inference ready. Choose a level or upload image for auto suggestion.');
+  const [aiHint, setAiHint] = useState('🤖 OpenAI Vision enabled. Upload an image for automatic crowd detection.');
   const [formFeedback, setFormFeedback] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState('idle');
@@ -309,22 +307,27 @@ export default function Home() {
     }
 
     const abortController = new AbortController();
-    const timeoutId = window.setTimeout(() => abortController.abort(), 10000);
+    const timeoutId = window.setTimeout(() => abortController.abort(), 30000);
 
     try {
-      const response = await fetch(`${API_BASE}/canteens/status`, { signal: abortController.signal });
-      if (!response.ok) throw new Error('Unable to load dashboard data');
+      console.log('🔗 Fetching from:', `${API_BASE}/canteens/status`);
+      const response = await fetch(`${API_BASE}/canteens/status`, {
+        signal: abortController.signal,
+        headers: { 'Accept': 'application/json' }
+      });
+      if (!response.ok) throw new Error(`API Error: ${response.status} ${response.statusText}`);
       const json = await response.json();
       console.log('📊 API Response:', json.data);
       console.log('📊 API last_updated values:', (json.data || []).map((item) => ({ canteen_id: item.canteen_id, last_updated: item.last_updated })));
       setStatusList(json.data || []);
     } catch (error) {
       if (error.name === 'AbortError') {
-        console.warn('Dashboard fetch aborted');
+        console.warn('⏱️ Dashboard fetch timeout (backend is slow)');
+        setStatusError('Backend is slow to respond. Make sure Firebase is properly connected.');
       } else {
-        console.error(error);
+        console.error('❌ Dashboard fetch error:', error);
         setStatusList([]);
-        setStatusError('Unable to load dashboard data. Ensure the backend is running on port 8000 and open the frontend at http://localhost:3000.');
+        setStatusError(`Error: ${error.message}. Backend on http://localhost:8000, Frontend on http://localhost:5173`);
       }
     } finally {
       window.clearTimeout(timeoutId);
@@ -531,12 +534,12 @@ export default function Home() {
         window.clearTimeout(aiTimeout.current);
         aiTimeout.current = null;
       }
-      setAiHint('AI inference currently off. Choose a level or upload image for auto suggestion.');
+      setAiHint('🤖 OpenAI Vision enabled. Upload an image for automatic crowd detection.');
       return;
     }
 
     setSelectedLevel('');
-    setAiHint('🧠 Analysing image density...');
+    setAiHint('🔍 Processing image with OpenAI Vision...');
     if (aiTimeout.current) {
       window.clearTimeout(aiTimeout.current);
     }
@@ -555,10 +558,11 @@ export default function Home() {
 
     aiTimeout.current = window.setTimeout(() => {
       const predicted = simulateAIClassification(file);
-      setSelectedLevel(predicted);
-      setAiHint(`✅ AI suggestion applied: ${predicted}`);
+      // Don't set selectedLevel - let backend AI analyze when user submits
+      // Just show hint that AI will analyze on submission
+      setAiHint('🤖 Ready to analyze. Submit without selecting a level for AI detection, or choose manually.');
       aiTimeout.current = null;
-    }, 1400);
+    }, 800);
   };
 
   const handleFileChange = async (event) => {
@@ -584,13 +588,12 @@ export default function Home() {
     }
 
     let level = selectedLevel;
-    if (!level && selectedFile) {
-      level = simulateAIClassification(selectedFile);
-      setSelectedLevel(level);
-    }
+    // Don't simulate AI here - let backend handle real AI analysis
+    // Just send the level as-is (null if not selected)
 
-    if (!level) {
-      setFormFeedback('Please select a crowd level or upload an image for AI suggestion.');
+    // Validation: require either manual crowd level OR image for AI detection
+    if (!level && !selectedImagePreview) {
+      setFormFeedback('❌ Please select a crowd level OR upload an image for AI detection.');
       return;
     }
 

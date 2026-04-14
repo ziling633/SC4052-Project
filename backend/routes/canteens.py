@@ -21,34 +21,55 @@ async def get_all_canteens_status():
     This endpoint now uses logic that averages reports from the last 10 minutes.
     """
     try:
+        print("📡 Fetching canteen status...")
         db = get_db()
+        
         # Fetch all canteens to ensure the dashboard shows every location
         canteen_list = list(db.collection("canteens").stream())
         
         if not canteen_list:
             raise HTTPException(status_code=404, detail="No canteens found in database")
         
+        print(f"📋 Found {len(canteen_list)} canteens, computing status...")
+        
         statuses = []
-        for canteen in canteen_list:
+        for i, canteen in enumerate(canteen_list):
             cid = canteen.id
             cdata = canteen.to_dict()
             
-            # Use the specialized logic function to handle the math and staleness
-            crowd = compute_crowd_status(db, cid)
-            
-            # Map the results to our Pydantic model
-            statuses.append(CrowdStatus(
-                canteen_id=cid,
-                name=cdata.get("name", "Unknown"),
-                location=cdata.get("location", "Unknown"),
-                lat=cdata.get("lat"),
-                lng=cdata.get("lng"),
-                current_status=crowd["status"],
-                confidence=crowd["confidence"],
-                last_updated=crowd["last_updated"],
-                report_count=crowd["report_count"]
-            ))
+            try:
+                # Use the specialized logic function to handle the math and staleness
+                crowd = compute_crowd_status(db, cid)
+                
+                # Map the results to our Pydantic model
+                statuses.append(CrowdStatus(
+                    canteen_id=cid,
+                    name=cdata.get("name", "Unknown"),
+                    location=cdata.get("location", "Unknown"),
+                    lat=cdata.get("lat"),
+                    lng=cdata.get("lng"),
+                    current_status=crowd["status"],
+                    confidence=crowd["confidence"],
+                    last_updated=crowd["last_updated"],
+                    report_count=crowd["report_count"]
+                ))
+                print(f"  ✅ [{i+1}/{len(canteen_list)}] {cdata.get('name', 'Unknown')}: {crowd['status']}")
+            except Exception as e:
+                print(f"  ⚠️  [{i+1}/{len(canteen_list)}] Error computing {cdata.get('name', 'Unknown')}: {e}")
+                # Use fallback status if computation fails
+                statuses.append(CrowdStatus(
+                    canteen_id=cid,
+                    name=cdata.get("name", "Unknown"),
+                    location=cdata.get("location", "Unknown"),
+                    lat=cdata.get("lat"),
+                    lng=cdata.get("lng"),
+                    current_status="Unknown",
+                    confidence=0,
+                    last_updated=None,
+                    report_count=0
+                ))
         
+        print(f"✅ Returning {len(statuses)} canteen statuses")
         return AllCanteenStatus(
             status="success",
             message=f"Retrieved aggregation for {len(statuses)} canteens",
@@ -57,7 +78,9 @@ async def get_all_canteens_status():
         )
     except Exception as e:
         print(f"❌ Fetch Error: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error while fetching canteen status")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @router.get("/canteens/{canteen_id}", response_model=CrowdStatus)
 async def get_canteen_details(canteen_id: str):
