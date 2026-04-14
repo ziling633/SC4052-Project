@@ -53,7 +53,7 @@ async def get_all_canteens_status():
                     last_updated=crowd["last_updated"],
                     report_count=crowd["report_count"]
                 ))
-                print(f"  ✅ [{i+1}/{len(canteen_list)}] {cdata.get('name', 'Unknown')}: {crowd['status']}")
+                print(f"Processed {len(statuses)} canteens")
             except Exception as e:
                 print(f"  ⚠️  [{i+1}/{len(canteen_list)}] Error computing {cdata.get('name', 'Unknown')}: {e}")
                 # Use fallback status if computation fails
