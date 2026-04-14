@@ -1,0 +1,42 @@
+# Google Cloud Build configuration for automated deployments
+steps:
+  # Step 1: Build Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/campus-flow-api:$SHORT_SHA'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/campus-flow-api:latest'
+      - '-f'
+      - 'backend/Dockerfile'
+      - './backend'
+
+  # Step 2: Push to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/campus-flow-api:$SHORT_SHA'
+
+  # Step 3: Deploy to Cloud Run
+  - name: 'gcr.io/cloud-builders/gke-deploy'
+    args:
+      - run
+      - --filename=.gcloud/
+      - --image=gcr.io/$PROJECT_ID/campus-flow-api:$SHORT_SHA
+      - --location=us-central1
+      - --namespace=default
+
+images:
+  - 'gcr.io/$PROJECT_ID/campus-flow-api:$SHORT_SHA'
+  - 'gcr.io/$PROJECT_ID/campus-flow-api:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+# Timeout for the build
+timeout: '1800s'
+
+substitutions:
+  _REGION: 'us-central1'
+  _SERVICE_NAME: 'campus-flow-api'

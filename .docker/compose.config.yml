@@ -1,0 +1,39 @@
+version: '3'
+project_name: 'Campus Flow'
+description: 'Campus Crowd Monitoring and Analytics System'
+
+services:
+  api:
+    name: 'Campus Flow API'
+    description: 'FastAPI backend service'
+    language: 'python'
+    framework: 'FastAPI'
+    dockerfile: 'backend/Dockerfile'
+    port: 8000
+
+  frontend:
+    name: 'Campus Flow Frontend'
+    description: 'Next.js web application'
+    language: 'javascript'
+    framework: 'Next.js'
+    dockerfile: 'frontend/Dockerfile'
+    port: 3000
+
+deployment:
+  frontend:
+    platform: 'Vercel'
+    region: 'Global CDN'
+    url_pattern: 'https://{project}.vercel.app'
+
+  backend:
+    platform: 'Google Cloud Run'
+    region: 'us-central1'
+    url_pattern: 'https://{project}-{hash}.run.app'
+
+ci_cd:
+  provider: 'GitHub Actions'
+  workflow_file: '.github/workflows/deploy.yml'
+  triggers:
+    - 'push to main'
+    - 'push to develop'
+    - 'pull requests to main'

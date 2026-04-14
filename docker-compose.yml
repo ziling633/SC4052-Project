@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  # Backend API Service
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: campus-flow-api
+    ports:
+      - "8000:8000"
+    environment:
+      - FIREBASE_CREDENTIALS=/app/firebase-key.json
+      - ENV=development
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./backend:/app
+      - ./backend/firebase-key.json:/app/firebase-key.json:ro
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+  # Frontend Application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: campus-flow-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm run dev
+    depends_on:
+      - api
+
+networks:
+  default:
+    name: campus-flow-network

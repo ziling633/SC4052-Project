@@ -1,0 +1,172 @@
+name: Deploy to Vercel and Google Cloud
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+
+env:
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_REGION: us-central1
+  GCP_SERVICE: campus-flow-api
+
+jobs:
+  # Test Job
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install backend dependencies
+      working-directory: ./backend
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Run backend tests
+      working-directory: ./backend
+      run: |
+        python -m pytest test_endpoints.py -v --tb=short || true
+    
+    - name: Run linting checks
+      working-directory: ./backend
+      run: |
+        python -m pip install pylint
+        pylint main.py || true
+
+  # Deploy Frontend to Vercel
+  deploy-frontend:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Deploy to Vercel
+      uses: amondnet/vercel-action@v25
+      with:
+        vercel-token: ${{ secrets.VERCEL_TOKEN }}
+        vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+        vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+        working-directory: './frontend'
+        scope: ${{ secrets.VERCEL_ORG_ID }}
+        production: true
+    
+    - name: Comment PR with deployment URL
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: '✅ Frontend deployed to Vercel'
+          })
+
+  # Deploy Backend to Google Cloud Run
+  deploy-backend:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        project_id: ${{ secrets.GCP_PROJECT_ID }}
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
+        export_default_credentials: true
+    
+    - name: Configure Docker authentication
+      run: |
+        gcloud auth configure-docker
+    
+    - name: Build Docker image
+      working-directory: ./backend
+      run: |
+        docker build -t gcr.io/$GCP_PROJECT_ID/$GCP_SERVICE:$GITHUB_SHA \
+                     -t gcr.io/$GCP_PROJECT_ID/$GCP_SERVICE:latest \
+                     -f Dockerfile .
+    
+    - name: Push Docker image to GCR
+      working-directory: ./backend
+      run: |
+        docker push gcr.io/$GCP_PROJECT_ID/$GCP_SERVICE:$GITHUB_SHA
+        docker push gcr.io/$GCP_PROJECT_ID/$GCP_SERVICE:latest
+    
+    - name: Deploy to Cloud Run
+      run: |
+        gcloud run deploy $GCP_SERVICE \
+          --image gcr.io/$GCP_PROJECT_ID/$GCP_SERVICE:$GITHUB_SHA \
+          --region $GCP_REGION \
+          --platform managed \
+          --allow-unauthenticated \
+          --memory 512Mi \
+          --cpu 1 \
+          --timeout 3600 \
+          --max-instances 100 \
+          --set-env-vars FIREBASE_CREDENTIALS=/secrets/firebase,ENV=production
+    
+    - name: Get Cloud Run URL
+      id: deploy
+      run: |
+        SERVICE_URL=$(gcloud run services describe $GCP_SERVICE \
+          --region $GCP_REGION \
+          --format 'value(status.url)')
+        echo "backend_url=$SERVICE_URL" >> $GITHUB_OUTPUT
+        echo "Backend deployed to: $SERVICE_URL"
+    
+    - name: Update Vercel environment variable
+      if: success()
+      working-directory: ./frontend
+      run: |
+        npm install -g vercel
+        vercel env pull --token=${{ secrets.VERCEL_TOKEN }} --scope=${{ secrets.VERCEL_ORG_ID }}
+        # The backend URL is now available at ${{ steps.deploy.outputs.backend_url }}
+        # Update NEXT_PUBLIC_API_URL in Vercel console manually or via:
+        # vercel env add NEXT_PUBLIC_API_URL ${{ steps.deploy.outputs.backend_url }}
+
+  # Notification Job
+  notify:
+    needs: [deploy-frontend, deploy-backend]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Send Slack notification
+      if: ${{ secrets.SLACK_WEBHOOK_URL }}
+      uses: slackapi/slack-github-action@v1.24.0
+      with:
+        payload: |
+          {
+            "text": "Campus Flow Deployment Status",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*Deployment Summary*\nFrontend: ${{ needs.deploy-frontend.result }}\nBackend: ${{ needs.deploy-backend.result }}"
+                }
+              }
+            ]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK

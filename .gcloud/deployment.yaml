@@ -1,0 +1,63 @@
+# Kubernetes deployment manifest for advanced users
+# Optional: For deploying to GKE (Kubernetes) instead of Cloud Run
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: campus-flow-api
+  namespace: default
+  labels:
+    app: campus-flow-api
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: campus-flow-api
+  template:
+    metadata:
+      labels:
+        app: campus-flow-api
+    spec:
+      containers:
+      - name: api
+        image: gcr.io/PROJECT_ID/campus-flow-api:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: ENV
+          value: "production"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: campus-flow-api
+spec:
+  selector:
+    app: campus-flow-api
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8000
+  type: LoadBalancer
