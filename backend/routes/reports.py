@@ -122,8 +122,8 @@ async def submit_report(request_payload: ReportRequest, request: Request):
             "image_type": request_payload.image_type,
             "image_size": request_payload.image_size,
             "image_preview_url": None,  # Will be populated if image provided
-            "ai_confidence": ai_analysis.get("confidence", 0) if ai_analysis else 0,
-            "ai_reasoning": ai_analysis.get("description", "") if ai_analysis else "",
+            "ai_confidence": ai_analysis.get("confidence", 0) if ai_analysis else None,
+            "ai_reasoning": ai_analysis.get("description", "") if ai_analysis else None,
             "timestamp": firestore.SERVER_TIMESTAMP,
             "user_id": "anon_user"
         }
