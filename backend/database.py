@@ -3,18 +3,19 @@ Firebase database initialization and utilities
 """
 import os
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials, firestore, storage
 from dotenv import load_dotenv
 
 load_dotenv()
 
 # Global database client
 db = None
+bucket = None
 
 # Initialize Firebase
 def init_firebase():
     """Initialize Firebase Admin SDK"""
-    global db
+    global db, bucket
     try:
         # Check if already initialized
         if not firebase_admin._apps:
@@ -29,6 +30,8 @@ def init_firebase():
             print("✅ Firebase initialized successfully")
         
         db = firestore.client()
+        # Specify bucket name explicitly: project-id.firebasestorage.app
+        bucket = storage.bucket("campus-flow-as-a-service-50de2.firebasestorage.app")
         return db
     except Exception as e:
         print(f"❌ Firebase initialization issue: {e}")
@@ -43,3 +46,56 @@ def get_db():
     if db is None:
         db = init_firebase()
     return db
+
+# Get Storage bucket
+def get_bucket():
+    """Get Firebase Storage bucket"""
+    global bucket
+    if bucket is None:
+        init_firebase()
+    return bucket
+
+# Upload image to storage
+def upload_image_to_storage(base64_image: str, file_name: str) -> str:
+    """
+    Upload base64 image to Firebase Storage and return download URL
+    
+    Args:
+        base64_image: Base64 encoded image string (may include data URI prefix)
+        file_name: Name for the file in storage (e.g., 'report_12345.jpg')
+    
+    Returns:
+        str: Public download URL for the image, or None if upload fails
+    """
+    try:
+        import base64
+        from io import BytesIO
+        
+        bucket = get_bucket()
+        if bucket is None:
+            print("⚠️  Storage bucket not available")
+            return None
+        
+        # Remove data URI prefix if present (e.g., "data:image/jpeg;base64,")
+        if "," in base64_image:
+            base64_image = base64_image.split(",")[1]
+        
+        # Decode base64 to bytes
+        image_bytes = base64.b64decode(base64_image)
+        
+        # Upload to storage
+        blob = bucket.blob(f"vision-reports/{file_name}")
+        blob.upload_from_string(
+            image_bytes,
+            content_type="image/jpeg"
+        )
+        
+        # Get public download URL (set as public)
+        blob.make_public()
+        url = blob.public_url
+        print(f"✅ Image uploaded: {url}")
+        return url
+        
+    except Exception as e:
+        print(f"⚠️  Image upload skipped: {e}")
+        return None

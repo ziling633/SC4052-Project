@@ -134,6 +134,14 @@ function simulateAIClassification(file) {
 
 function compressImage(file, maxWidth = 800, quality = 0.7) {
   return new Promise((resolve, reject) => {
+    // 3MB limit (in bytes)
+    const MAX_SIZE = 3 * 1024 * 1024;
+
+    if (file.size > MAX_SIZE) {
+      reject(new Error(`Image exceeds 3MB limit (${(file.size / 1024 / 1024).toFixed(2)}MB). Please choose a smaller image.`));
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (event) => {
       const img = new Image();
@@ -152,8 +160,23 @@ function compressImage(file, maxWidth = 800, quality = 0.7) {
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
 
-        // Output as jpeg with specified quality
-        resolve(canvas.toDataURL('image/jpeg', quality));
+        // Start with quality 0.7, reduce if needed to stay under 3MB
+        let outputQuality = quality;
+        let base64 = canvas.toDataURL('image/jpeg', outputQuality);
+
+        // If still too large, recursively reduce quality
+        while (base64.length > MAX_SIZE * 4 / 3 && outputQuality > 0.1) {
+          outputQuality -= 0.1;
+          base64 = canvas.toDataURL('image/jpeg', outputQuality);
+        }
+
+        // Final check
+        if (base64.length > MAX_SIZE * 4 / 3) {
+          reject(new Error('Unable to compress image enough. Please try a different image.'));
+          return;
+        }
+
+        resolve(base64);
       };
       img.onerror = reject;
       img.src = event.target.result;
@@ -521,8 +544,13 @@ export default function Home() {
     try {
       const preview = await createImagePreview(file);
       setSelectedImagePreview(preview);
+      setFormFeedback('');
     } catch (previewError) {
-      console.error('Unable to create image preview:', previewError);
+      console.error('Error processing image:', previewError);
+      setSelectedImagePreview(null);
+      setFormFeedback(`❌ ${previewError.message}`);
+      setShowToast(true, `Error: ${previewError.message}`, 'error');
+      return;
     }
 
     aiTimeout.current = window.setTimeout(() => {
@@ -862,9 +890,8 @@ export default function Home() {
                   onMouseEnter={() => setActiveIndex(idx)}
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => selectValue(opt.value)}
-                  className={`cursor-pointer select-none rounded-lg px-4 py-2.5 text-sm transition-colors duration-200 ${
-                    isActive ? 'bg-black/5' : ''
-                  } ${isSelected ? 'font-medium text-[var(--text)]' : 'text-[var(--text)] hover:bg-black/5'}`}
+                  className={`cursor-pointer select-none rounded-lg px-4 py-2.5 text-sm transition-colors duration-200 ${isActive ? 'bg-black/5' : ''
+                    } ${isSelected ? 'font-medium text-[var(--text)]' : 'text-[var(--text)] hover:bg-black/5'}`}
                 >
                   {opt.label}
                 </div>
@@ -1018,7 +1045,7 @@ export default function Home() {
                       An anonymised manifest for the rhythms that shape our canteen.
                     </p>
                   </div>
-                  <button 
+                  <button
                     onClick={() => setPrivacyModalOpen(true)}
                     className="mt-8 inline-flex w-full items-center justify-center rounded-full border border-white/20 bg-white/10 px-8 py-4 text-xs font-bold uppercase tracking-[0.22em] transition-all duration-300 ease-out hover:scale-[1.01] hover:bg-white hover:text-[var(--primary)] hover:shadow-lg sm:w-fit"
                   >
@@ -1301,7 +1328,7 @@ export default function Home() {
                         const lastUpdated = canteenData?.lastUpdated;
                         const colors = getMarkerColor(crowdLevel, isStale);
                         const isHigh = !isStale && String(crowdLevel || '').toLowerCase() === 'high';
-                        
+
                         // Smart Tooltip Position Logic
                         const topValue = parseFloat(marker.top);
                         const leftValue = parseFloat(marker.left);
@@ -1310,18 +1337,16 @@ export default function Home() {
                         const shiftLeft = leftValue > 70; // If marker is on the right 30%, shift tooltip left
 
                         return (
-                          <div 
-                            key={marker.label} 
-                            className="group absolute z-10 flex items-center justify-center cursor-help hover:z-[999]" 
+                          <div
+                            key={marker.label}
+                            className="group absolute z-10 flex items-center justify-center cursor-help hover:z-[999]"
                             style={{ top: marker.top, left: marker.left, width: '3rem', height: '3rem', transform: 'translate(-50%, -50%)' }}
                           >
                             {/* Tooltip Wrapper */}
                             <div className="absolute inset-0">
-                              <div className={`pointer-events-none absolute w-max scale-90 rounded-xl bg-slate-900/95 px-4 py-2.5 text-center text-white opacity-0 shadow-2xl transition duration-200 group-hover:scale-100 group-hover:opacity-100 ${
-                                showBelow ? 'top-full mt-3' : 'bottom-full mb-3'
-                              } ${
-                                shiftRight ? 'left-0 translate-x-0' : shiftLeft ? 'right-0 translate-x-0' : 'left-1/2 -translate-x-1/2'
-                              }`}>
+                              <div className={`pointer-events-none absolute w-max scale-90 rounded-xl bg-slate-900/95 px-4 py-2.5 text-center text-white opacity-0 shadow-2xl transition duration-200 group-hover:scale-100 group-hover:opacity-100 ${showBelow ? 'top-full mt-3' : 'bottom-full mb-3'
+                                } ${shiftRight ? 'left-0 translate-x-0' : shiftLeft ? 'right-0 translate-x-0' : 'left-1/2 -translate-x-1/2'
+                                }`}>
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-white/60 mb-0.5">{marker.id}</p>
                                 <p className="text-xs font-semibold">
                                   {isStale ? 'Outdated' : `${crowdLevel} crowd`}
@@ -1330,11 +1355,9 @@ export default function Home() {
                                   {lastUpdated ? `Updated ${getDisplayLabel(lastUpdated)}` : 'No reports yet'}
                                 </p>
                                 {/* Arrow */}
-                                <div className={`absolute left-1/2 h-1.5 w-1.5 -translate-x-1/2 rotate-45 bg-slate-900/95 ${
-                                  showBelow ? 'bottom-full translate-y-1/2' : 'top-full -translate-y-1/2'
-                                } ${
-                                  shiftRight ? 'left-4' : shiftLeft ? 'left-auto right-4' : ''
-                                }`}></div>
+                                <div className={`absolute left-1/2 h-1.5 w-1.5 -translate-x-1/2 rotate-45 bg-slate-900/95 ${showBelow ? 'bottom-full translate-y-1/2' : 'top-full -translate-y-1/2'
+                                  } ${shiftRight ? 'left-4' : shiftLeft ? 'left-auto right-4' : ''
+                                  }`}></div>
                               </div>
                             </div>
 
@@ -1474,9 +1497,8 @@ export default function Home() {
                   setIsDropActive(false);
                 }}
                 onDrop={handleFileDrop}
-                className={`rounded-xl border-2 border-dashed p-6 text-center transition-all duration-300 ease-out hover:scale-[1.01] hover:shadow-lg ${
-                  isDropActive ? 'border-[var(--primary)] bg-black/5' : 'border-black/10 bg-[var(--bg-soft)]'
-                }`}
+                className={`rounded-xl border-2 border-dashed p-6 text-center transition-all duration-300 ease-out hover:scale-[1.01] hover:shadow-lg ${isDropActive ? 'border-[var(--primary)] bg-black/5' : 'border-black/10 bg-[var(--bg-soft)]'
+                  }`}
               >
                 <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-black/5 text-[var(--muted)]">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-5 w-5">
@@ -1637,9 +1659,9 @@ export default function Home() {
                     <p className="text-sm leading-7 text-[var(--muted)]">{item.desc}</p>
                   </div>
                 ))}
-                
+
                 <div className="pt-4">
-                  <button 
+                  <button
                     onClick={() => setPrivacyModalOpen(false)}
                     className="w-full rounded-full bg-[var(--text)] py-4 text-xs font-bold uppercase tracking-[0.2em] text-white transition hover:opacity-90"
                   >

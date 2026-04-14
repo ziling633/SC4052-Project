@@ -2,6 +2,7 @@
 Report submission endpoints - Refactored for Phase 2
 """
 import datetime
+import uuid
 from fastapi import APIRouter, HTTPException, Request
 
 # Native Firebase/Google Cloud imports
@@ -9,7 +10,7 @@ from google.cloud import firestore
 
 # Project internal imports
 from models import ReportRequest, ReportResponse
-from database import get_db
+from database import get_db, upload_image_to_storage
 from logic.rate_limiter import global_rate_limiter
 
 router = APIRouter(prefix="/api/v1")
@@ -59,10 +60,35 @@ async def submit_report(request_payload: ReportRequest, request: Request):
             "image_name": request_payload.image_name,
             "image_type": request_payload.image_type,
             "image_size": request_payload.image_size,
-            "image_preview": request_payload.image_preview,
+            "image_preview_url": None,  # Will be populated if image provided
             "timestamp": firestore.SERVER_TIMESTAMP,
             "user_id": "anon_user"
         }
+        
+        # 3a. If image preview provided, validate size and upload to Storage
+        if request_payload.image_preview:
+            # Validate image size (3MB limit for base64 encoded data)
+            MAX_SIZE_BYTES = 3 * 1024 * 1024
+            base64_size = len(request_payload.image_preview)
+            estimated_actual_size = base64_size * 0.75
+            
+            if estimated_actual_size > MAX_SIZE_BYTES:
+                raise HTTPException(
+                    status_code=413,
+                    detail={
+                        "message": f"Image is too large (~{estimated_actual_size / 1024 / 1024:.1f}MB). Maximum allowed is 3MB."
+                    }
+                )
+            
+            # Attempt upload, but don't fail the report if it fails
+            try:
+                file_name = f"{request_payload.canteen_id}_{uuid.uuid4().hex[:8]}.jpg"
+                image_url = upload_image_to_storage(request_payload.image_preview, file_name)
+                if image_url:
+                    report_data["image_preview_url"] = image_url
+            except Exception as e:
+                print(f"⚠️  Image upload failed (non-blocking): {e}")
+                # Continue without image - report is still valid
         
         new_report_ref = db.collection("reports").document()
         new_report_ref.set(report_data)
