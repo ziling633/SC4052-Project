@@ -499,13 +499,17 @@ export default function Home() {
       items = items.filter((item) => item.crowdLevel.toLowerCase() === crowdFilter);
     }
 
-    // 3. Sorting
+    // 3. Sort: non-stale first (by most recent), stale last (by most recent)
     items.sort((a, b) => {
-      if (sortBy === 'latest') {
-        const timeA = a.lastUpdated ? new Date(a.lastUpdated).getTime() : 0;
-        const timeB = b.lastUpdated ? new Date(b.lastUpdated).getTime() : 0;
-        return timeB - timeA; // Descending (most recent first)
-      }
+      const timeA = a.lastUpdated ? new Date(a.lastUpdated).getTime() : 0;
+      const timeB = b.lastUpdated ? new Date(b.lastUpdated).getTime() : 0;
+
+      // Push stale items to the bottom
+      if (a.isStale && !b.isStale) return 1;
+      if (!a.isStale && b.isStale) return -1;
+
+      // Within same group, sort by most recent first
+      return timeB - timeA;
     });
 
     return items;
