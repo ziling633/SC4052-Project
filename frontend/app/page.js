@@ -506,8 +506,6 @@ export default function Home() {
         const timeB = b.lastUpdated ? new Date(b.lastUpdated).getTime() : 0;
         return timeB - timeA; // Descending (most recent first)
       }
-      // Default: sort by name
-      return a.name.localeCompare(b.name);
     });
 
     return items;
@@ -1197,64 +1195,67 @@ export default function Home() {
                     </div>
                     <span className="inline-flex rounded-full bg-[var(--bg-soft)] px-4 py-2 text-xs uppercase tracking-[0.24em] text-[var(--muted)]">Live</span>
                   </div>
-                  <FadeInReveal className="mt-8 space-y-5">
+                  <FadeInReveal className="mt-8">
                     {directoryLoading ? (
                       <DirectorySkeleton />
                     ) : mergedDirectoryItems.length > 0 ? (
-                      mergedDirectoryItems.map((item) => {
-                        const normalized = item.crowdLevel?.toLowerCase() || 'unknown';
-                        const statusStyles =
-                          normalized === 'low'
-                            ? 'bg-emerald-100 text-emerald-900'
-                            : normalized === 'medium'
-                              ? 'bg-amber-100 text-amber-900'
-                              : normalized === 'high'
-                                ? 'bg-rose-100 text-rose-900'
-                                : 'bg-slate-100 text-slate-700';
+                      <div className="space-y-5 max-h-[32rem] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-black/10 scrollbar-track-transparent">
+                        {mergedDirectoryItems.map((item) => {
+                          const normalized = item.crowdLevel?.toLowerCase() || 'unknown';
+                          const statusStyles =
+                            normalized === 'low'
+                              ? 'bg-emerald-100 text-emerald-900'
+                              : normalized === 'medium'
+                                ? 'bg-amber-100 text-amber-900'
+                                : normalized === 'high'
+                                  ? 'bg-rose-100 text-rose-900'
+                                  : 'bg-slate-100 text-slate-700';
 
-                        return (
-                          <div
-                            key={item.id}
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => openCanteenModal(item)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                openCanteenModal(item);
-                              }
-                            }}
-                            className={`group w-full cursor-pointer rounded-[1.75rem] border border-[rgba(33,18,8,0.06)] px-5 py-4 text-left transition-all duration-300 ease-out hover:scale-[1.01] hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-black/10 ${item.isStale ? 'bg-slate-50 opacity-70' : 'bg-[var(--bg-soft)]'
-                              }`}
-                          >
-                            <div className="flex items-center justify-between gap-4">
-                              <div>
-                                <p className="text-sm font-semibold text-[var(--text)]">{item.name}</p>
-                                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                                  {item.lastUpdated ? `Updated ${getDisplayLabel(item.lastUpdated)}` : 'No timestamp available'}
-                                </p>
+                          return (
+                            <div
+                              key={item.id}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => openCanteenModal(item)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  openCanteenModal(item);
+                                }
+                              }}
+                              className={`group w-full cursor-pointer rounded-[1.75rem] border border-[rgba(33,18,8,0.06)] px-5 py-4 text-left transition-all duration-300 ease-out hover:scale-[1.01] hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-black/10 ${item.isStale ? 'bg-slate-50 opacity-70' : 'bg-[var(--bg-soft)]'
+                                }`}
+                            >
+                              <div className="flex items-center justify-between gap-4">
+                                <div>
+                                  <p className="text-sm font-semibold text-[var(--text)]">{item.name}</p>
+                                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                                    {item.lastUpdated ? `Updated ${getDisplayLabel(item.lastUpdated)}` : 'No timestamp available'}
+                                  </p>
+                                </div>
+                                {item.isStale ? (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      goToSubmitReport(item.name);
+                                    }}
+                                    className="rounded-full border border-black/20 bg-transparent px-4 py-2 text-[10px] font-semibold uppercase tracking-widest text-[var(--text)] transition-all duration-300 ease-out hover:scale-[1.02] hover:bg-black hover:text-white hover:shadow-lg cursor-pointer"
+                                  >
+                                    Update Status
+                                  </button>
+                                ) : (
+                                  <span className={`inline-flex rounded-full px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.18em] ${statusStyles}`}>
+                                    {item.crowdLevel || 'UNKNOWN'}
+                                  </span>
+                                )}
                               </div>
-                              {item.isStale ? (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    goToSubmitReport(item.name);
-                                  }}
-                                  className="rounded-full border border-black/20 bg-transparent px-4 py-2 text-[10px] font-semibold uppercase tracking-widest text-[var(--text)] transition-all duration-300 ease-out hover:scale-[1.02] hover:bg-black hover:text-white hover:shadow-lg cursor-pointer"
-                                >
-                                  Update Status
-                                </button>
-                              ) : (
-                                <span className={`inline-flex rounded-full px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.18em] ${statusStyles}`}>
-                                  {item.crowdLevel || 'UNKNOWN'}
-                                </span>
-                              )}
+                              <div className="mt-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Tap for detail</div>
                             </div>
-                            <div className="mt-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Tap for detail</div>
-                          </div>
-                        );
-                      })
+                          );
+                        })
+                        })
+                      </div>
                     ) : (
                       <div className="rounded-[1.75rem] border border-[rgba(33,18,8,0.06)] bg-[var(--bg-soft)] p-5 text-sm text-[var(--muted)]">No directory items found in Firestore.</div>
                     )}
