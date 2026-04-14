@@ -2,7 +2,7 @@
 
 **CROWDBYTE** is a "Campus-Flow-as-a-Service" (CFaaS) platform designed for real-time, crowdsourced crowd sensing of campus canteens. Built for a Cloud Computing context, it leverages a hybrid serverless-and-API architecture to provide live spatial intelligence while maintaining strict user anonymity through edge-based redaction and ephemeral data lifecycles.
 
-## ☁️ Cloud Computing Architecture
+## Cloud Computing Architecture
 
 The project implements a modern, decoupled cloud architecture:
 
@@ -19,7 +19,7 @@ The project implements a modern, decoupled cloud architecture:
 - **Cloud Storage (Object Layer)**: Firebase Storage.
   - Stores anonymized, privacy-filtered preview images with secure public URLs.
 
-## 🤖 AI-Powered Crowd Sensing
+## AI-Powered Crowd Sensing
 
 CROWDBYTE integrates an advanced Vision AI pipeline:
 
@@ -31,7 +31,7 @@ CROWDBYTE integrates an advanced Vision AI pipeline:
   - `ai_reasoning`: Brief contextual explanation of the classification.
 - **Fallback**: A client-side "Simulation Mode" (deterministic heuristic) provides instant UX feedback when AI inference is pending or unavailable.
 
-## 🛡️ Privacy & Security Manifest
+## Privacy & Security Manifest
 
 Aligning with modern privacy protocols (e.g., USENIX 2020), CROWDBYTE decouples identity from spatial analytics:
 
@@ -40,7 +40,7 @@ Aligning with modern privacy protocols (e.g., USENIX 2020), CROWDBYTE decouples 
 - **Data Decay (Staleness)**: Cloud data is considered "stale" after **120 minutes**. The UI automatically invalidates outdated reports to prevent reliance on stale tracking.
 - **Ephemeral Lifecycle**: Original high-res imagery is never stored; only compressed, blurred, and anonymized previews are retained in cloud storage.
 
-## 📡 API Endpoints (v1)
+## API Endpoints (v1)
 
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
@@ -49,7 +49,7 @@ Aligning with modern privacy protocols (e.g., USENIX 2020), CROWDBYTE decouples 
 | `POST` | `/api/v1/report` | Submit a report (Manual or AI-assisted). |
 | `GET` | `/api/v1/health` | Service health check. |
 
-## 🚀 Local Development
+## Local Development
 
 ### Prerequisites
 - Node.js (v18+)
@@ -85,7 +85,7 @@ Aligning with modern privacy protocols (e.g., USENIX 2020), CROWDBYTE decouples 
    npm run dev
    ```
 
-## 📊 Database Scripts
+## Database Scripts
 - `setup_collections.py`: Initializes the `canteens` collection with NTU metadata.
 - `populate.py`: Generates sample historical data for testing aggregation.
 - `seed_canteen_crowd_levels.py`: Seeds randomized initial states for UI testing.
