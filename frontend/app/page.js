@@ -383,29 +383,36 @@ export default function Home() {
     const unsubscribeReports = onSnapshot(
       reportsQuery,
       (snapshot) => {
-        const counts = {};
-        const highCrowdCounts = {};
+        const weightedScores = {};
         const latestByCanteen = {};
         const latestImageByCanteen = {};
         let latestImage = null;
 
+        const oneHourAgo = Date.now() - 60 * 60 * 1000;
+        const CROWD_WEIGHT = { low: 1, medium: 2, high: 3 };
+
         snapshot.docs.forEach((doc, index) => {
           const data = doc.data();
           const canteenName = normalizeCanteenName(data.canteen_name || data.canteenName || 'Unknown');
-          counts[canteenName] = (counts[canteenName] || 0) + 1;
+
+          const ts = data.timestamp;
+          const tsMs = ts && typeof ts.toDate === 'function'
+            ? ts.toDate().getTime()
+            : typeof ts === 'string'
+              ? new Date(ts).getTime()
+              : ts instanceof Date
+                ? ts.getTime()
+                : null;
 
           const rawLevel = data.crowd_level || data.crowdLevel || data.currentCrowdLevel || 'Unknown';
           const crowdLevel = normalizeLevel(rawLevel);
 
-          if (crowdLevel === 'High') {
-            highCrowdCounts[canteenName] = (highCrowdCounts[canteenName] || 0) + 1;
+          if (tsMs && tsMs >= oneHourAgo) {
+            weightedScores[canteenName] = (weightedScores[canteenName] || 0) + (CROWD_WEIGHT[crowdLevel.toLowerCase()] || 0);
           }
 
           if (!latestImage && data.image_preview) {
-            latestImage = {
-              preview: data.image_preview,
-              canteenName,
-            };
+            latestImage = { preview: data.image_preview, canteenName };
           }
 
           const canteenId = data.canteen_id;
@@ -416,16 +423,7 @@ export default function Home() {
             };
           }
           if (canteenId && !latestByCanteen[canteenId]) {
-            const ts = data.timestamp;
-            const lastUpdated =
-              ts && typeof ts.toDate === 'function'
-                ? ts.toDate().toISOString()
-                : typeof ts === 'string'
-                  ? ts
-                  : ts instanceof Date
-                    ? ts.toISOString()
-                    : null;
-
+            const lastUpdated = tsMs ? new Date(tsMs).toISOString() : null;
             latestByCanteen[canteenId] = {
               crowdLevel,
               lastUpdated,
@@ -445,27 +443,18 @@ export default function Home() {
 
         const totalReports = snapshot.size;
         let topCanteen = 'None';
-        let maxHighReports = 0;
+        let topScore = 0;
 
-        Object.entries(highCrowdCounts).forEach(([name, count]) => {
-          if (count > maxHighReports) {
-            maxHighReports = count;
-            topCanteen = `${name} (${count})`;
+        Object.entries(weightedScores).forEach(([name, score]) => {
+          if (score > topScore) {
+            topScore = score;
+            topCanteen = name;
           }
         });
 
-        // Fallback to most reports overall if no High crowd reports exist
-        if (topCanteen === 'None' && snapshot.size > 0) {
-          let topOverallCount = 0;
-          Object.entries(counts).forEach(([name, count]) => {
-            if (count > topOverallCount) {
-              topOverallCount = count;
-              topCanteen = `${name} (${count})`;
-            }
-          });
-        }
-
         setReportSummary({ totalReports, topCanteen });
+
+
         setLatestUpload(latestImage);
         setLatestReportsByCanteen(latestByCanteen);
       },
