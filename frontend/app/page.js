@@ -527,7 +527,6 @@ export default function Home() {
       return;
     }
 
-    setSelectedLevel('');
     setAiHint('🔍 Processing image with OpenAI Vision...');
     if (aiTimeout.current) {
       window.clearTimeout(aiTimeout.current);
@@ -549,7 +548,10 @@ export default function Home() {
       const predicted = simulateAIClassification(file);
       // Don't set selectedLevel - let backend AI analyze when user submits
       // Just show hint that AI will analyze on submission
-      setAiHint('🤖 Ready to analyze. Submit without selecting a level for AI detection, or choose manually.');
+      setAiHint(selectedLevel
+        ? 'Manual level selected — AI detection skipped on submit.'
+        : 'No level selected — AI will auto-detect crowd on submit.'
+      );
       aiTimeout.current = null;
     }, 800);
   };
@@ -609,8 +611,9 @@ export default function Home() {
           },
           body: JSON.stringify({
             canteen_id: canteenId,
-            crowd_level: level,
-            source: selectedFile ? 'vision-ai' : 'manual',
+            crowd_level: level || null,
+            source: selectedFile && !level ? 'vision-ai' : 'manual',
+            use_ai: selectedFile && !level, // tells backend to run AI only if no manual level selected
             image_name: selectedFile?.name || null,
             image_type: selectedFile?.type || null,
             image_size: selectedFile?.size || null,
@@ -634,7 +637,10 @@ export default function Home() {
         setSelectedLevel('');
         setSelectedFile(null);
         setSelectedImagePreview(null);
-        setAiHint('AI inference currently off. Choose a level or upload image for auto suggestion.');
+        setAiHint(selectedLevel
+          ? 'Manual level selected — AI detection skipped on submit.'
+          : 'No level selected — AI will auto-detect crowd on submit.'
+        );
         formRef.current?.reset();
 
         window.setTimeout(() => {
@@ -933,8 +939,6 @@ export default function Home() {
                 <div className="w-16 h-16 mx-auto bg-[var(--primary)] rounded-full flex items-center justify-center">
                   <div className="w-8 h-8 bg-white rounded-full animate-pulse"></div>
                 </div>
-                {/* Scanning line animation */}
-                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-[var(--primary)] animate-spin"></div>
               </div>
               <h3 className="text-lg font-semibold text-[var(--text)] mb-2">Processing Report</h3>
               <p className="text-sm text-[var(--muted)]">{processingMessage}</p>
@@ -1453,7 +1457,15 @@ export default function Home() {
               <label className="block text-sm font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Select crowd level</label>
               <CanteenDropdown
                 value={selectedLevel}
-                onChange={(value) => setSelectedLevel(value)}
+                onChange={(value) => {
+                  setSelectedLevel(value);
+                  setAiHint(value
+                    ? 'Manual level selected — AI detection skipped on submit.'
+                    : selectedFile
+                      ? 'No level selected — AI will auto-detect crowd on submit.'
+                      : 'OpenAI Vision enabled. Upload an image for automatic crowd detection.'
+                  );
+                }}
                 dropdownKey="report-crowdLevel"
                 options={[
                   { value: 'Low', label: 'Low' },
