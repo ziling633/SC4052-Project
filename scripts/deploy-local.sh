@@ -22,15 +22,15 @@ fi
 echo -e "\n${YELLOW}Starting Docker Compose...${NC}"
 
 # Stop any existing containers
-docker-compose down 2>/dev/null || true
+docker compose down 2>/dev/null || true
 
 # Build images
 echo -e "${YELLOW}Building Docker images...${NC}"
-docker-compose build
+docker compose build
 
 # Start services
 echo -e "${YELLOW}Starting services...${NC}"
-docker-compose up -d
+docker compose up -d
 
 # Wait for services to be ready
 echo -e "${YELLOW}Waiting for services to be ready...${NC}"
@@ -51,8 +51,8 @@ echo "  Backend:   http://localhost:8000"
 echo "  API Docs:  http://localhost:8000/docs"
 echo ""
 echo "View logs:"
-echo "  Backend:   docker-compose logs -f api"
-echo "  Frontend:  docker-compose logs -f frontend"
+echo "  Backend:   docker compose logs -f api"
+echo "  Frontend:  docker compose logs -f frontend"
 echo ""
 echo "Stop services:"
-echo "  docker-compose down"
+echo "  docker compose down"

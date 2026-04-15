@@ -27,10 +27,10 @@ echo -e "\n${YELLOW}Authenticating with Vercel...${NC}"
 vercel login
 
 echo -e "\n${YELLOW}Pulling project configuration...${NC}"
-vercel pull --yes
+vercel pull --yes --environment=production
 
 echo -e "\n${YELLOW}Building project...${NC}"
-vercel build
+vercel build --prod
 
 echo -e "\n${YELLOW}Deploying to production...${NC}"
 DEPLOY_URL=$(vercel deploy --prebuilt --prod)
