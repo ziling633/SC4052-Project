@@ -2,6 +2,8 @@
 Firebase database initialization and utilities
 """
 import os
+import json
+import tempfile
 import firebase_admin
 from firebase_admin import credentials, firestore, storage
 from dotenv import load_dotenv
@@ -19,11 +21,28 @@ def init_firebase():
     try:
         # Check if already initialized
         if not firebase_admin._apps:
-            cred_path = os.getenv("FIREBASE_CREDENTIALS", "firebase-key.json")
-            if not os.path.exists(cred_path):
-                print(f"⚠️  Firebase credentials file not found at: {cred_path}")
-                print(f"⚠️  Looking for: {os.path.abspath(cred_path)}")
-                return None
+            cred_input = os.getenv("FIREBASE_CREDENTIALS", "firebase-key.json")
+            
+            # Handle two cases: JSON content or file path
+            if cred_input.strip().startswith('{'):
+                # Case 1: Environment variable contains JSON content
+                try:
+                    cred_dict = json.loads(cred_input)
+                    # Write to temporary file
+                    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+                        json.dump(cred_dict, f)
+                        cred_path = f.name
+                    print("✅ Firebase credentials loaded from environment variable")
+                except json.JSONDecodeError as e:
+                    print(f"❌ Invalid Firebase credentials JSON: {e}")
+                    return None
+            else:
+                # Case 2: Environment variable contains file path
+                cred_path = cred_input
+                if not os.path.exists(cred_path):
+                    print(f"⚠️  Firebase credentials file not found at: {cred_path}")
+                    print(f"⚠️  Looking for: {os.path.abspath(cred_path)}")
+                    return None
             
             cred = credentials.Certificate(cred_path)
             firebase_admin.initialize_app(cred)
