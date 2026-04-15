@@ -406,19 +406,20 @@ export default function Home() {
 
           const rawLevel = data.crowd_level || data.crowdLevel || data.currentCrowdLevel || 'Unknown';
           const crowdLevel = normalizeLevel(rawLevel);
+          const imagePreview = data.image_preview_url || data.image_preview || null;
 
           if (tsMs && tsMs >= oneHourAgo) {
             weightedScores[canteenName] = (weightedScores[canteenName] || 0) + (CROWD_WEIGHT[crowdLevel.toLowerCase()] || 0);
           }
 
-          if (!latestImage && data.image_preview) {
-            latestImage = { preview: data.image_preview, canteenName };
+          if (!latestImage && imagePreview) {
+            latestImage = { preview: imagePreview, canteenName };
           }
 
           const canteenId = data.canteen_id;
-          if (canteenId && data.image_preview && !latestImageByCanteen[canteenId]) {
+          if (canteenId && imagePreview && !latestImageByCanteen[canteenId]) {
             latestImageByCanteen[canteenId] = {
-              imagePreview: data.image_preview,
+              imagePreview: imagePreview,
               imageSource: data.source || 'manual',
             };
           }
@@ -427,9 +428,9 @@ export default function Home() {
             latestByCanteen[canteenId] = {
               crowdLevel,
               lastUpdated,
-              imagePreview: data.image_preview || null,
+              imagePreview: imagePreview,
               source: data.source || 'manual',
-              imageSource: data.image_preview ? (data.source || 'manual') : null,
+              imageSource: imagePreview ? (data.source || 'manual') : null,
             };
           }
         });
