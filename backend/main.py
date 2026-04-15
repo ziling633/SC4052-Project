@@ -25,15 +25,26 @@ app = FastAPI(
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 print(f"🔗 Frontend URL: {FRONTEND_URL}")
 
+# Build allowed origins - include multiple possible Vercel URLs
+allowed_origins = [
+    "http://localhost:5173",      # Vite dev server
+    "http://localhost:3000",      # Alternative frontend
+    "http://127.0.0.1:5173",
+    FRONTEND_URL
+]
+
+# Add hardcoded Vercel URLs as fallback
+vercel_urls = [
+    "https://frontend-five-gamma-36.vercel.app",
+    "https://frontend-cgrcm3crt-ka-ya-with-a-vs-projects.vercel.app",
+]
+allowed_origins.extend(vercel_urls)
+
+print(f"🔐 Allowed CORS origins: {allowed_origins}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",      # Vite dev server
-        "http://localhost:3000",      # Alternative frontend
-        "http://127.0.0.1:5173",
-        "https://frontend-five-gamma-36.vercel.app",  # Vercel frontend
-        FRONTEND_URL
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
