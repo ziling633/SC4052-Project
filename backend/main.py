@@ -37,6 +37,7 @@ allowed_origins = [
 vercel_urls = [
     "https://frontend-five-gamma-36.vercel.app",
     "https://frontend-cgrcm3crt-ka-ya-with-a-vs-projects.vercel.app",
+    "https://frontend-n8emwvvfo-ka-ya-with-a-vs-projects.vercel.app",
 ]
 allowed_origins.extend(vercel_urls)
 
