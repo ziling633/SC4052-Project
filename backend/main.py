@@ -31,6 +31,7 @@ app.add_middleware(
         "http://localhost:5173",      # Vite dev server
         "http://localhost:3000",      # Alternative frontend
         "http://127.0.0.1:5173",
+        "https://frontend-five-gamma-36.vercel.app",  # Vercel frontend
         FRONTEND_URL
     ],
     allow_credentials=True,
