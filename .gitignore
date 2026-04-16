@@ -47,3 +47,4 @@ venv/
 firebase-key.json
 
 GOOGLE_API_KEY=AIzaSyAVsW7mrv_lEFAcX11NscUj6NSHp6Bwi8Q
+.vercel
