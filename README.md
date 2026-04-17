@@ -49,44 +49,32 @@ Aligning with modern privacy protocols (e.g., USENIX 2020), CROWDBYTE decouples 
 | `POST` | `/api/v1/report` | Submit a report (Manual or AI-assisted). |
 | `GET` | `/api/v1/health` | Service health check. |
 
-## Local Development
+## 🚀 Quick Start
 
-### Prerequisites
-- Node.js (v18+)
-- Python 3.10+
-- Firebase Project with Firestore & Storage enabled
-- OpenAI API Key (for Vision features)
+For detailed setup instructions, see the [documentation folder](documentation/README.md):
 
-### Backend Setup
-1. Create a `.env` file in `backend/` with:
-   ```env
-   FIREBASE_CREDENTIALS=firebase-key.json
-   OPENAI_API_KEY=your_key_here
-   PORT=8000
-   ENV=development
-   ```
-2. Place your Firebase Service Account JSON as `backend/firebase-key.json`.
-3. Install dependencies and run:
-   ```bash
-   cd backend
-   pip install -r requirements.txt
-   python main.py
-   ```
+- **Getting started?** → [PHASE_1_QUICK_START](documentation/phases/PHASE_1_QUICK_START.md)
+- **Deploying?** → [DEPLOYMENT_QUICK_START](documentation/deployment/DEPLOYMENT_QUICK_START.md)  
+- **Full architecture?** → [BACKEND_DEVELOPMENT_PLAN](documentation/planning/BACKEND_DEVELOPMENT_PLAN.md)
 
-### Frontend Setup
-1. Create a `.env.local` in `frontend/` with:
-   ```env
-   NEXT_PUBLIC_API_BASE=http://localhost:8000/api/v1
-   ```
-2. Run development server:
-   ```bash
-   cd frontend
-   npm install
-   npm run dev
-   ```
+## 🏗️ Tech Stack
 
-## Database Scripts
-- `setup_collections.py`: Initializes the `canteens` collection with NTU metadata.
-- `populate.py`: Generates sample historical data for testing aggregation.
-- `seed_canteen_crowd_levels.py`: Seeds randomized initial states for UI testing.
-# Updated
+| Layer | Technology |
+|-------|------------|
+| **Frontend** | Next.js 16, React, Tailwind CSS, Vercel |
+| **Backend** | FastAPI, Python 3.10+, Uvicorn |
+| **Database** | Firebase Firestore (NoSQL) |
+| **Storage** | Firebase Storage (Images) |
+| **AI/ML** | OpenAI GPT-4o Vision API |
+| **Infrastructure** | Docker, Docker Compose, Vercel, GitHub Actions |
+
+## 📦 Project Structure
+
+```
+SC4052-Project/
+├── frontend/              # Next.js app (deployed on Vercel)
+├── backend/               # FastAPI service
+├── scripts/               # Deployment & setup scripts
+├── documentation/         # All guides & specifications
+└── README.md              # This file
+```
