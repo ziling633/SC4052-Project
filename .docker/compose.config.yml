@@ -32,7 +32,6 @@ deployment:
 
 ci_cd:
   provider: 'GitHub Actions'
-  workflow_file: '.github/workflows/deploy.yml'
   triggers:
     - 'push to main'
     - 'push to develop'
