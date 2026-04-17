@@ -16,7 +16,7 @@ CANTEENS_DATA = [
     {"id": "6", "name": "Canteen 14 (Hall 14)", "lat": 1.352906, "lng": 103.682304, "location": "Hall 14"},
     {"id": "7", "name": "Canteen 16 (Hall 16)", "lat": 1.349720, "lng": 103.681284, "location": "Hall 16"},
     {"id": "8", "name": "North Hill Food Court", "lat": 1.3487, "lng": 103.6890, "location": "North Hill"},
-    {"id": "9", "name": "Crescent Food Court", "lat": 1.3490, "lng": 103.6860, "location": "Crescent Hall"},
+    {"id": "9", "name": "Crespion Food Court", "lat": 1.3490, "lng": 103.6860, "location": "Crespion Hall"},
     {"id": "10", "name": "Northspine food court (Canteen A)", "lat": 1.348440, "lng": 103.685478, "location": "North Spine"},
     {"id": "11", "name": "Southspine food court (Canteen B)", "lat": 1.3424, "lng": 103.6823, "location": "South Spine"},
     {"id": "12", "name": "Quad Cafe", "lat": 1.3505, "lng": 103.6860, "location": "School of Biological Sciences"},

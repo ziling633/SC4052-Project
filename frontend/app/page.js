@@ -30,7 +30,7 @@ const CANTEEN_NAMES = [
   'Canteen 14 (Hall 14)',
   'Canteen 16 (Hall 16)',
   'North Hill Food Court',
-  'Crescent Food Court',
+  'Crespion Food Court',
   'Northspine food court (Canteen A)',
   'Southspine food court (Canteen B)',
   'Quad Cafe',
@@ -47,7 +47,7 @@ const CANTEEN_ID_MAP = {
   'Canteen 14 (Hall 14)': '6',
   'Canteen 16 (Hall 16)': '7',
   'North Hill Food Court': '8',
-  'Crescent Food Court': '9',
+  'Crespion Food Court': '9',
   'Northspine food court (Canteen A)': '10',
   'Southspine food court (Canteen B)': '11',
   'Quad Cafe': '12',
@@ -56,7 +56,7 @@ const CANTEEN_ID_MAP = {
 
 const MAP_COORDINATES = [
   { id: 'North Hill Food Court', label: 'NH', lat: 1.3487, lng: 103.6890, top: '10%', left: '83%' },
-  { id: 'Crescent Food Court', label: 'CR', lat: 1.3490, lng: 103.6860, top: '80%', left: '85%' },
+  { id: 'Crespion Food Court', label: 'CR', lat: 1.3490, lng: 103.6860, top: '80%', left: '85%' },
   { id: 'Northspine food court (Canteen A)', label: 'NSA', lat: 1.348440, lng: 103.685478, top: '42%', left: '50%' },
   { id: 'Southspine food court (Canteen B)', label: 'SSB', lat: 1.3424, lng: 103.6823, top: '70%', left: '28%' },
   { id: 'Quad Cafe', label: 'QC', lat: 1.3505, lng: 103.6860, top: '48%', left: '35%' },
@@ -73,7 +73,7 @@ const MAP_COORDINATES = [
 
 const CANTEEN_VISUALS = {
   'North Hill Food Court': { image: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1000&q=80', blur: 10 },
-  'Crescent Food Court': { image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1000&q=80', blur: 6 },
+  'Crespion Food Court': { image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1000&q=80', blur: 6 },
   'Northspine food court (Canteen A)': { image: 'https://images.unsplash.com/photo-1498654896293-37aacf113fd9?auto=format&fit=crop&w=1000&q=80', blur: 12 },
   'Southspine food court (Canteen B)': { image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1000&q=80', blur: 8 },
   'Quad Cafe': { image: 'https://images.unsplash.com/photo-1454789548928-9efd52dc4031?auto=format&fit=crop&w=1000&q=80', blur: 5 },
