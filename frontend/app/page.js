@@ -254,6 +254,9 @@ export default function Home() {
   const [processingStep, setProcessingStep] = useState(0);
   const [processingMessage, setProcessingMessage] = useState('');
 
+  // Mobile menu state
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
   const openCanteenModal = (canteen) => {
     setActiveCanteen(canteen);
     setModalOpen(true);
@@ -924,13 +927,62 @@ export default function Home() {
       <header className="sticky top-0 z-50 border-b border-black/5 bg-[#F9F7F2]/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <div className="text-sm uppercase tracking-[0.4em] text-[var(--muted)] font-semibold">CROWDBYTE</div>
+
+          {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-8 text-sm uppercase tracking-[0.25em] text-[var(--muted)]">
             <a href="#landing" className="transition-colors hover:text-[var(--text)]">Home</a>
             <a href="#dashboard" className="transition-colors hover:text-[var(--text)]">Dashboard</a>
             <a href="#report" className="transition-colors hover:text-[var(--text)]">Submit Report</a>
             <a href="#admin" className="transition-colors hover:text-[var(--text)]">Analytics</a>
           </nav>
+
+          {/* Mobile Hamburger Button */}
+          <button
+            className="md:hidden flex flex-col items-center justify-center w-10 h-10 gap-1.5 hover:opacity-70 transition-opacity"
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            aria-label="Toggle menu"
+          >
+            <span className={`w-6 h-0.5 bg-[var(--muted)] transition-all duration-300 ${isMenuOpen ? 'rotate-45 translate-y-2' : ''}`}></span>
+            <span className={`w-6 h-0.5 bg-[var(--muted)] transition-all duration-300 ${isMenuOpen ? 'opacity-0' : ''}`}></span>
+            <span className={`w-6 h-0.5 bg-[var(--muted)] transition-all duration-300 ${isMenuOpen ? '-rotate-45 -translate-y-2' : ''}`}></span>
+          </button>
         </div>
+
+        {/* Mobile Navigation Menu */}
+        {isMenuOpen && (
+          <div className="md:hidden border-t border-black/5 bg-[#F9F7F2] animate-in slide-in-from-top-2 duration-300">
+            <nav className="flex flex-col gap-0 px-6 py-4">
+              <a
+                href="#landing"
+                className="py-3 text-sm uppercase tracking-[0.25em] text-[var(--muted)] transition-colors hover:text-[var(--text)] border-b border-black/5"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Home
+              </a>
+              <a
+                href="#dashboard"
+                className="py-3 text-sm uppercase tracking-[0.25em] text-[var(--muted)] transition-colors hover:text-[var(--text)] border-b border-black/5"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Dashboard
+              </a>
+              <a
+                href="#report"
+                className="py-3 text-sm uppercase tracking-[0.25em] text-[var(--muted)] transition-colors hover:text-[var(--text)] border-b border-black/5"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Submit Report
+              </a>
+              <a
+                href="#admin"
+                className="py-3 text-sm uppercase tracking-[0.25em] text-[var(--muted)] transition-colors hover:text-[var(--text)]"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Analytics
+              </a>
+            </nav>
+          </div>
+        )}
       </header>
 
       {/* Processing Overlay */}
